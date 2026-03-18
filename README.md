@@ -4,11 +4,60 @@ LiteLLM-based proxy that routes OpenAI-compatible requests to GitLab Duo (and so
 
 ## How it works
 
+```mermaid
+flowchart LR
+    subgraph Clients
+        A[OpenAI SDK]
+        B[OpenClaw]
+        C[OpenCode]
+    end
+
+    subgraph LLM Proxy
+        D["LiteLLM<br/>:4000"]
+        E["Token Callback<br/>(async_pre_call_hook)"]
+        F["Token Cache<br/>(in-memory)"]
+    end
+
+    subgraph Providers
+        G["GitLab Duo API<br/>cloud.gitlab.com"]
+        H["GitHub Models<br/>(planned)"]
+    end
+
+    A & B & C -->|OpenAI-compatible| D
+    D -->|every request| E
+    E -->|check expiry| F
+    F -->|fresh?| E
+    E -->|expired?| G2["GitLab OIDC<br/>/api/v4/ai/..."]
+    G2 -->|new token| F
+    E -->|inject headers| D
+    D -->|authenticated| G
+    D -.->|future| H
 ```
-Client (OpenAI SDK)
-  → LiteLLM proxy (port 4000)
-    → gitlab_token_callback.py (injects fresh OIDC headers per-request)
-      → GitLab Duo API (cloud.gitlab.com)
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant L as LiteLLM :4000
+    participant CB as Token Callback
+    participant Cache as Token Cache
+    participant GL as GitLab OIDC
+
+    C->>L: POST /v1/chat/completions
+    L->>CB: async_pre_call_hook(data)
+
+    alt Token cached & valid (>5 min to expiry)
+        CB->>Cache: get headers
+        Cache-->>CB: cached headers (<1ms)
+    else Token expired or near-expiry
+        CB->>GL: fetch OIDC token (~200ms)
+        GL-->>CB: token + headers + expires_at
+        CB->>Cache: update cache
+    end
+
+    CB-->>L: data with extra_headers injected
+    L->>GL: API call with fresh OIDC headers
+    GL-->>L: LLM response
+    L-->>C: OpenAI-format response
 ```
 
 The callback (`gitlab_token_callback.py`) uses LiteLLM's `CustomLogger.async_pre_call_hook` to:

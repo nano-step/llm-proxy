@@ -1,0 +1,30 @@
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+
+litellm_settings:
+  callbacks: gitlab_token_callback.proxy_handler_instance
+
+model_list:
+  - model_name: gitlab/claude-sonnet-4-6
+    litellm_params:
+      model: anthropic/claude-sonnet-4-6
+      api_base: https://cloud.gitlab.com/ai/v1/proxy/anthropic
+      api_key: gitlab-oidc
+
+  - model_name: gitlab/claude-opus-4-6
+    litellm_params:
+      model: anthropic/claude-opus-4-6
+      api_base: https://cloud.gitlab.com/ai/v1/proxy/anthropic
+      api_key: gitlab-oidc
+
+  - model_name: gitlab/claude-sonnet-4-5
+    litellm_params:
+      model: anthropic/claude-sonnet-4-5-20250929
+      api_base: https://cloud.gitlab.com/ai/v1/proxy/anthropic
+      api_key: gitlab-oidc
+
+  - model_name: gitlab/claude-haiku-4-5
+    litellm_params:
+      model: anthropic/claude-haiku-4-5-20251001
+      api_base: https://cloud.gitlab.com/ai/v1/proxy/anthropic
+      api_key: gitlab-oidc

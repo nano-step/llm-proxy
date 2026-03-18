@@ -1,0 +1,21 @@
+__pycache__/
+*.pyc
+
+# Logs
+*.log
+
+# Secrets and tokens
+.env
+.token
+.headers
+.expires
+
+# Backups
+*.bak
+
+# Database
+*.db
+
+# Old configs
+config.yaml
+ecosystem.config.js

@@ -67,6 +67,24 @@ The callback (`gitlab_token_callback.py`) uses LiteLLM's `CustomLogger.async_pre
 
 Zero restarts. Zero cron jobs. Token stays fresh forever.
 
+## Why not call GitLab Duo directly?
+
+GitLab Duo requires OIDC tokens that expire every ~60 minutes. Without this proxy, every client would need to:
+
+1. **Handle OIDC auth** — fetch tokens from `/api/v4/ai/third_party_agents/direct_access`, track expiry, refresh before timeout
+2. **Inject GitLab-specific headers** — 12+ custom `x-gitlab-*` headers on every request
+3. **Manage credentials** — each client needs the GitLab PAT
+
+With the proxy, clients just use the standard OpenAI SDK with a single API key. The proxy handles all the GitLab auth complexity.
+
+| | Direct to GitLab Duo | Via LLM Proxy |
+|---|---|---|
+| Client auth | OIDC token + 12 headers | Single API key |
+| Token refresh | Every client implements it | Handled once, centrally |
+| SDK compatibility | Custom HTTP client needed | Any OpenAI SDK works |
+| Multi-provider | Hardcoded to GitLab | Swap providers in config |
+| Observability | Per-client logging | Centralized token/usage logging |
+
 ## Setup
 
 ### Prerequisites

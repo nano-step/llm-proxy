@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css?v=2">
+  <link rel="stylesheet" href="/static/style.css?v=3">
 </head>
 <body>
   <div class="app">
@@ -115,6 +115,49 @@
           <span class="card-value" id="alltimeSince">
             <span class="skeleton skeleton-text"></span>
           </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Cost Summary Cards -->
+    <div class="alltime-label">COST</div>
+    <section class="cards-grid cards-grid-cost" id="costCardsGrid">
+      <div class="card card-cost-today">
+        <div class="card-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <circle cx="10" cy="10" r="7" stroke="#10b981" stroke-width="1.5"/>
+            <path d="M10 6v8M8 8.5h4c.6 0 1 .4 1 1s-.4 1-1 1H8c-.6 0-1 .4-1 1s.4 1 1 1h4" stroke="#10b981" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="card-content">
+          <span class="card-label">Today's Cost</span>
+          <span class="card-value" id="costToday">
+            <span class="skeleton skeleton-text"></span>
+          </span>
+          <div class="card-split">
+            <span class="split-input">In: <span id="costTodayInput">—</span></span>
+            <span class="split-output">Out: <span id="costTodayOutput">—</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-cost-alltime">
+        <div class="card-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <circle cx="10" cy="10" r="7" stroke="#10b981" stroke-width="1.5"/>
+            <path d="M10 6v8M8 8.5h4c.6 0 1 .4 1 1s-.4 1-1 1H8c-.6 0-1 .4-1 1s.4 1 1 1h4" stroke="#10b981" stroke-width="1.2" stroke-linecap="round"/>
+            <circle cx="10" cy="10" r="9" stroke="#10b981" stroke-width="0.5" stroke-dasharray="2 2"/>
+          </svg>
+        </div>
+        <div class="card-content">
+          <span class="card-label">All-Time Cost</span>
+          <span class="card-value" id="costAlltime">
+            <span class="skeleton skeleton-text"></span>
+          </span>
+          <div class="card-split">
+            <span class="split-input">In: <span id="costAlltimeInput">—</span></span>
+            <span class="split-output">Out: <span id="costAlltimeOutput">—</span></span>
+          </div>
         </div>
       </div>
     </section>
@@ -241,9 +284,31 @@
       </div>
     </section>
 
+    <section class="charts-grid charts-grid-cost-breakdown">
+      <div class="card card-chart">
+        <div class="card-header"><h2>Cost by Model</h2></div>
+        <div class="chart-container chart-container-donut">
+          <canvas id="costModelDonutChart"></canvas>
+        </div>
+        <div class="donut-legend" id="costModelDonutLegend"></div>
+      </div>
+      <div class="card card-chart">
+        <div class="card-header"><h2>Cost by Agent</h2></div>
+        <div class="chart-container chart-container-donut">
+          <canvas id="costAgentDonutChart"></canvas>
+        </div>
+        <div class="donut-legend" id="costAgentDonutLegend"></div>
+      </div>
+    </section>
+
     <section class="card card-chart card-chart-wide">
       <div class="card-header"><h2>Cumulative Token Usage</h2></div>
       <div class="chart-container chart-container-wide"><canvas id="cumulativeChart"></canvas></div>
+    </section>
+
+    <section class="card card-chart card-chart-wide">
+      <div class="card-header"><h2>Cost Over Time</h2></div>
+      <div class="chart-container chart-container-wide"><canvas id="costChart"></canvas></div>
     </section>
 
     <!-- Model Usage Table -->
@@ -259,6 +324,7 @@
               <th>Input Tokens</th>
               <th>Output Tokens</th>
               <th>Total Tokens</th>
+              <th>Cost</th>
               <th>Requests</th>
             </tr>
           </thead>
@@ -269,15 +335,18 @@
               <td><span class="skeleton skeleton-text"></span></td>
               <td><span class="skeleton skeleton-text"></span></td>
               <td><span class="skeleton skeleton-text"></span></td>
-            </tr>
-            <tr class="skeleton-row">
-              <td><span class="skeleton skeleton-text"></span></td>
-              <td><span class="skeleton skeleton-text"></span></td>
-              <td><span class="skeleton skeleton-text"></span></td>
-              <td><span class="skeleton skeleton-text"></span></td>
               <td><span class="skeleton skeleton-text"></span></td>
             </tr>
             <tr class="skeleton-row">
+              <td><span class="skeleton skeleton-text"></span></td>
+              <td><span class="skeleton skeleton-text"></span></td>
+              <td><span class="skeleton skeleton-text"></span></td>
+              <td><span class="skeleton skeleton-text"></span></td>
+              <td><span class="skeleton skeleton-text"></span></td>
+              <td><span class="skeleton skeleton-text"></span></td>
+            </tr>
+            <tr class="skeleton-row">
+              <td><span class="skeleton skeleton-text"></span></td>
               <td><span class="skeleton skeleton-text"></span></td>
               <td><span class="skeleton skeleton-text"></span></td>
               <td><span class="skeleton skeleton-text"></span></td>
@@ -301,6 +370,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-  <script src="/static/app.js?v=2"></script>
+  <script src="/static/app.js?v=3"></script>
 </body>
 </html>

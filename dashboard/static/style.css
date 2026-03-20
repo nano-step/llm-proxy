@@ -599,6 +599,24 @@ body::before {
 .card-alltime-latency .card-value { color: #fbbf24; }
 .card-alltime-since .card-value { color: #c084fc; }
 
+/* --- Cost Cards --- */
+.cards-grid-cost {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.card-cost-today .card-value { color: #10b981; }
+.card-cost-alltime .card-value { color: #10b981; }
+
+.charts-grid-cost-breakdown {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
 /* --- Secondary Chart Grids --- */
 .charts-grid-metrics {
   display: grid;
@@ -630,6 +648,10 @@ body::before {
   .cards-grid-alltime {
     grid-template-columns: repeat(2, 1fr);
   }
+
+  .cards-grid-cost {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 @media (max-width: 768px) {
@@ -638,13 +660,15 @@ body::before {
   }
 
   .cards-grid,
-  .cards-grid-alltime {
+  .cards-grid-alltime,
+  .cards-grid-cost {
     grid-template-columns: 1fr;
   }
 
   .charts-grid,
   .charts-grid-metrics,
-  .charts-grid-secondary {
+  .charts-grid-secondary,
+  .charts-grid-cost-breakdown {
     grid-template-columns: 1fr;
   }
 

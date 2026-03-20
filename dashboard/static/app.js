@@ -23,6 +23,8 @@
   const CHART_REQUESTS_BORDER = '#22c55e';
   const CHART_CUMULATIVE_COLOR = 'rgba(99, 102, 241, 0.8)';
   const CHART_CUMULATIVE_BORDER = '#6366f1';
+  const CHART_COST_COLOR = 'rgba(16, 185, 129, 0.8)';
+  const CHART_COST_BORDER = '#10b981';
 
   const MODEL_COLORS = {};
   function getModelColor(name) {
@@ -48,6 +50,11 @@
   let activeAgentFilter = null;
   let cachedTimeSeriesData = null;
   let cachedModelData = null;
+  let costChart = null;
+  let costModelDonutChart = null;
+  let costAgentDonutChart = null;
+  let cachedCostModelData = null;
+  let cachedCostAgentData = null;
 
   // ── DOM References ─────────────────────────────────────
   const $ = (sel) => document.querySelector(sel);
@@ -89,6 +96,17 @@
     errorToast: $('#errorToast'),
     errorMessage: $('#errorMessage'),
     btnDismissError: $('#btnDismissError'),
+    costToday: $('#costToday'),
+    costTodayInput: $('#costTodayInput'),
+    costTodayOutput: $('#costTodayOutput'),
+    costAlltime: $('#costAlltime'),
+    costAlltimeInput: $('#costAlltimeInput'),
+    costAlltimeOutput: $('#costAlltimeOutput'),
+    costChartCanvas: $('#costChart'),
+    costModelDonutCanvas: $('#costModelDonutChart'),
+    costModelDonutLegend: $('#costModelDonutLegend'),
+    costAgentDonutCanvas: $('#costAgentDonutChart'),
+    costAgentDonutLegend: $('#costAgentDonutLegend'),
   };
 
   // ── Number Formatting ──────────────────────────────────
@@ -102,6 +120,12 @@
   function formatNumberFull(n) {
     if (n == null) return '—';
     return n.toLocaleString('en-US');
+  }
+
+  function formatCost(n) {
+    if (n == null || n === 0) return '$0.00';
+    if (n < 0.01) return '<$0.01';
+    return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
   // ── API Fetching ───────────────────────────────────────
@@ -184,6 +208,20 @@
       }
     } catch (err) {
       console.error('Alltime fetch error:', err);
+    }
+  }
+
+  async function loadCostSummary() {
+    try {
+      const data = await apiFetch('/api/cost/summary');
+      dom.costToday.textContent = formatCost(data.today_cost);
+      dom.costTodayInput.textContent = formatCost(data.today_input_cost);
+      dom.costTodayOutput.textContent = formatCost(data.today_output_cost);
+      dom.costAlltime.textContent = formatCost(data.alltime_cost);
+      dom.costAlltimeInput.textContent = formatCost(data.alltime_input_cost);
+      dom.costAlltimeOutput.textContent = formatCost(data.alltime_output_cost);
+    } catch (err) {
+      console.error('Cost summary fetch error:', err);
     }
   }
 
@@ -426,8 +464,14 @@
   }
 
   function buildDonutLegend(agents) {
+    const costMap = {};
+    if (cachedCostAgentData) {
+      cachedCostAgentData.forEach(function (a) { costMap[a.agent] = a.cost; });
+    }
     dom.donutLegend.innerHTML = '';
     agents.forEach((a) => {
+      const cost = costMap[a.agent];
+      const costStr = cost ? ' · ' + formatCost(cost) : '';
       const item = document.createElement('div');
       item.className = 'legend-item';
       item.innerHTML =
@@ -435,7 +479,7 @@
         getAgentColor(a.agent) +
         '"></span>' +
         '<span>' + escapeHtml(a.agent) + '</span>' +
-        '<span style="color:var(--text-muted);margin-left:2px">' + formatNumber(a.total_tokens) + '</span>';
+        '<span style="color:var(--text-muted);margin-left:2px">' + formatNumber(a.total_tokens) + costStr + '</span>';
       item.addEventListener('click', () => setAgentFilter(a.agent));
       dom.donutLegend.appendChild(item);
     });
@@ -461,16 +505,21 @@
     renderRequestsChart();
     loadLatencyChart();
     loadCumulativeChart();
+    loadCostChart();
   }
 
   // ── Model Table ────────────────────────────────────────
   function renderModelTable() {
     try {
       const models = cachedModelData || [];
+      const costMap = {};
+      if (cachedCostModelData) {
+        cachedCostModelData.forEach(function (m) { costMap[m.model] = m.cost; });
+      }
 
       if (models.length === 0) {
         dom.modelTableBody.innerHTML =
-          '<tr><td colspan="5"><div class="empty-state">' +
+          '<tr><td colspan="6"><div class="empty-state">' +
           '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">' +
           '<path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>' +
           '</svg><span>No model data available</span></div></td></tr>';
@@ -489,6 +538,7 @@
             '<td>' + formatNumberFull(m.input_tokens) + '</td>' +
             '<td>' + formatNumberFull(m.output_tokens) + '</td>' +
             '<td><strong>' + formatNumberFull(m.total_tokens) + '</strong></td>' +
+            '<td>' + formatCost(costMap[m.model] || 0) + '</td>' +
             '<td>' + formatNumberFull(m.requests) + '</td>' +
             '</tr>'
         )
@@ -918,6 +968,218 @@
       console.error('Cumulative chart fetch error:', err);
     }
   }
+
+  async function loadCostChart() {
+    try {
+      const config = getRangeConfig(currentRange);
+      const data = await apiFetch('/api/cost/daily?' + config.param);
+      const items = data.data || [];
+
+      const labels = items.map(function (d) { return formatBarLabel(d.hour || d.date, config.mode); });
+      const costData = items.map(function (d) { return d.cost || 0; });
+
+      const canvas = dom.costChartCanvas;
+      if (costChart) {
+        costChart.data.labels = labels;
+        costChart.data.datasets[0].data = costData;
+        costChart.update('none');
+      } else {
+        const ctx = canvas.getContext('2d');
+        const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height || 240);
+        gradient.addColorStop(0, 'rgba(16, 185, 129, 0.2)');
+        gradient.addColorStop(1, 'rgba(16, 185, 129, 0.01)');
+
+        costChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Cost',
+              data: costData,
+              backgroundColor: CHART_COST_COLOR,
+              borderColor: CHART_COST_BORDER,
+              borderWidth: 1,
+              borderRadius: 4,
+              borderSkipped: false,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              legend: { display: false },
+              tooltip: Object.assign({}, getCommonTooltipConfig(), {
+                callbacks: {
+                  label: function (ctx) {
+                    var item = items[ctx.dataIndex];
+                    return [
+                      'Total: ' + formatCost(ctx.parsed.y),
+                      'Input: ' + formatCost(item ? item.input_cost : 0),
+                      'Output: ' + formatCost(item ? item.output_cost : 0),
+                    ];
+                  },
+                },
+              }),
+            },
+            scales: {
+              x: {
+                grid: getCommonGridConfig(),
+                ticks: Object.assign({}, getCommonTickConfig(), { maxRotation: 45, autoSkip: true, maxTicksLimit: 15 }),
+                border: { display: false },
+              },
+              y: {
+                grid: getCommonGridConfig(),
+                ticks: Object.assign({}, getCommonTickConfig(), {
+                  callback: function (val) { return '$' + val.toFixed(2); },
+                }),
+                border: { display: false },
+              },
+            },
+          },
+        });
+      }
+    } catch (err) {
+      console.error('Cost chart fetch error:', err);
+    }
+  }
+
+  async function loadCostModelDonut() {
+    try {
+      const data = await apiFetch('/api/cost/models');
+      cachedCostModelData = data.models || [];
+      const models = cachedCostModelData.filter(function (m) { return m.cost > 0; });
+      if (models.length === 0) return;
+
+      const labels = models.map(function (m) { return m.model; });
+      const values = models.map(function (m) { return m.cost; });
+      const colors = models.map(function (m) { return getModelColor(m.model); });
+
+      if (costModelDonutChart) {
+        costModelDonutChart.data.labels = labels;
+        costModelDonutChart.data.datasets[0].data = values;
+        costModelDonutChart.data.datasets[0].backgroundColor = colors;
+        costModelDonutChart.data.datasets[0].borderColor = colors;
+        costModelDonutChart.update('none');
+      } else {
+        const ctx = dom.costModelDonutCanvas.getContext('2d');
+        costModelDonutChart = new Chart(ctx, {
+          type: 'doughnut',
+          data: {
+            labels: labels,
+            datasets: [{
+              data: values,
+              backgroundColor: colors,
+              borderColor: colors,
+              borderWidth: 2,
+              hoverBorderColor: '#fff',
+              hoverBorderWidth: 2,
+              spacing: 2,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '65%',
+            plugins: {
+              legend: { display: false },
+              tooltip: Object.assign({}, getCommonTooltipConfig(), {
+                callbacks: {
+                  label: function (tooltipCtx) {
+                    const total = tooltipCtx.dataset.data.reduce(function (a, b) { return a + b; }, 0);
+                    const pct = total > 0 ? ((tooltipCtx.parsed / total) * 100).toFixed(1) : 0;
+                    return tooltipCtx.label + ': ' + formatCost(tooltipCtx.parsed) + ' (' + pct + '%)';
+                  },
+                },
+              }),
+            },
+          },
+        });
+      }
+
+      const legendEl = dom.costModelDonutLegend;
+      legendEl.innerHTML = '';
+      models.forEach(function (m) {
+        const item = document.createElement('div');
+        item.className = 'legend-item';
+        item.innerHTML = '<span class="legend-dot" style="background:' + getModelColor(m.model) + '"></span>' +
+          '<span>' + escapeHtml(m.model) + '</span>' +
+          '<span style="color:var(--text-muted);margin-left:2px">' + formatCost(m.cost) + '</span>';
+        legendEl.appendChild(item);
+      });
+    } catch (err) {
+      console.error('Cost model donut error:', err);
+    }
+  }
+
+  async function loadCostAgentDonut() {
+    try {
+      const data = await apiFetch('/api/cost/agents');
+      cachedCostAgentData = data.agents || [];
+      const agents = cachedCostAgentData.filter(function (a) { return a.cost > 0; });
+      if (agents.length === 0) return;
+
+      const labels = agents.map(function (a) { return a.agent; });
+      const values = agents.map(function (a) { return a.cost; });
+      const colors = agents.map(function (a) { return getAgentColor(a.agent); });
+
+      if (costAgentDonutChart) {
+        costAgentDonutChart.data.labels = labels;
+        costAgentDonutChart.data.datasets[0].data = values;
+        costAgentDonutChart.data.datasets[0].backgroundColor = colors;
+        costAgentDonutChart.data.datasets[0].borderColor = colors;
+        costAgentDonutChart.update('none');
+      } else {
+        const ctx = dom.costAgentDonutCanvas.getContext('2d');
+        costAgentDonutChart = new Chart(ctx, {
+          type: 'doughnut',
+          data: {
+            labels: labels,
+            datasets: [{
+              data: values,
+              backgroundColor: colors,
+              borderColor: colors,
+              borderWidth: 2,
+              hoverBorderColor: '#fff',
+              hoverBorderWidth: 2,
+              spacing: 2,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '65%',
+            plugins: {
+              legend: { display: false },
+              tooltip: Object.assign({}, getCommonTooltipConfig(), {
+                callbacks: {
+                  label: function (tooltipCtx) {
+                    const total = tooltipCtx.dataset.data.reduce(function (a, b) { return a + b; }, 0);
+                    const pct = total > 0 ? ((tooltipCtx.parsed / total) * 100).toFixed(1) : 0;
+                    return tooltipCtx.label + ': ' + formatCost(tooltipCtx.parsed) + ' (' + pct + '%)';
+                  },
+                },
+              }),
+            },
+          },
+        });
+      }
+
+      const legendEl = dom.costAgentDonutLegend;
+      legendEl.innerHTML = '';
+      agents.forEach(function (a) {
+        const item = document.createElement('div');
+        item.className = 'legend-item';
+        item.innerHTML = '<span class="legend-dot" style="background:' + getAgentColor(a.agent) + '"></span>' +
+          '<span>' + escapeHtml(a.agent) + '</span>' +
+          '<span style="color:var(--text-muted);margin-left:2px">' + formatCost(a.cost) + '</span>';
+        legendEl.appendChild(item);
+      });
+    } catch (err) {
+      console.error('Cost agent donut error:', err);
+    }
+  }
+
   function escapeHtml(str) {
     if (!str) return '';
     const div = document.createElement('div');
@@ -971,6 +1233,7 @@
 
     await Promise.allSettled([
       loadAllTimeSummary(),
+      loadCostSummary(),
       loadSummary(),
       renderBarChart(),
       renderRequestsChart(),
@@ -980,6 +1243,9 @@
       renderModelTable(),
       loadLatencyChart(),
       loadCumulativeChart(),
+      loadCostChart(),
+      loadCostModelDonut(),
+      loadCostAgentDonut(),
     ]);
 
     dom.btnRefresh.classList.remove('spinning');

@@ -55,6 +55,7 @@
   let costAgentDonutChart = null;
   let cachedCostModelData = null;
   let cachedCostAgentData = null;
+  let cachedPricingData = null;
 
   // ── DOM References ─────────────────────────────────────
   const $ = (sel) => document.querySelector(sel);
@@ -201,7 +202,7 @@
       const avgMs = data.avg_duration_ms;
       dom.alltimeLatency.textContent = avgMs != null ? (avgMs / 1000).toFixed(1) + 's' : '—';
       if (data.first_seen) {
-        const d = new Date(data.first_seen);
+        const d = parseUTCTimestamp(data.first_seen);
         dom.alltimeSince.textContent = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       } else {
         dom.alltimeSince.textContent = '—';
@@ -339,12 +340,18 @@
     };
   }
 
+  function parseUTCTimestamp(raw) {
+    if (!raw) return new Date(NaN);
+    const s = String(raw);
+    return new Date(s.endsWith('Z') || s.includes('+') || s.includes('T') && s.match(/[+-]\d{2}:?\d{2}$/) ? s : s + 'Z');
+  }
+
   function formatBarLabel(raw, mode) {
     if (mode === 'hourly') {
-      const d = new Date(raw);
+      const d = parseUTCTimestamp(raw);
       return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
     }
-    const d = new Date(raw);
+    const d = parseUTCTimestamp(raw);
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
 
@@ -527,10 +534,18 @@
       }
 
       dom.modelTableBody.innerHTML = models
+        .filter((m) => m.total_tokens > 0)
         .map(
-          (m) =>
-            '<tr>' +
-            '<td><span class="model-name"><span class="model-badge">' +
+          (m) => {
+            const pricing = findModelPricing(m.model);
+            const tooltipAttr = pricing
+              ? ' class="model-name has-pricing-tooltip" data-input-price="' +
+                formatPricePerMillion(pricing.input_cost_per_token) +
+                '" data-output-price="' +
+                formatPricePerMillion(pricing.output_cost_per_token) + '"'
+              : ' class="model-name"';
+            return '<tr>' +
+            '<td><span' + tooltipAttr + '><span class="model-badge">' +
             escapeHtml(getModelShortName(m.model)) +
             '</span> ' +
             escapeHtml(m.model) +
@@ -540,7 +555,8 @@
             '<td><strong>' + formatNumberFull(m.total_tokens) + '</strong></td>' +
             '<td>' + formatCost(costMap[m.model] || 0) + '</td>' +
             '<td>' + formatNumberFull(m.requests) + '</td>' +
-            '</tr>'
+            '</tr>';
+          }
         )
         .join('');
     } catch (err) {
@@ -1044,6 +1060,33 @@
     }
   }
 
+  async function loadPricingData() {
+    try {
+      const data = await apiFetch('/api/pricing');
+      cachedPricingData = data.pricing || [];
+    } catch (err) {
+      console.error('Pricing fetch error:', err);
+    }
+  }
+
+  function findModelPricing(modelName) {
+    if (!cachedPricingData || !modelName) return null;
+    const lower = modelName.toLowerCase();
+    for (let i = 0; i < cachedPricingData.length; i++) {
+      const p = cachedPricingData[i];
+      // model_pattern uses SQL LIKE syntax with % wildcards, convert to simple substring match
+      const pattern = p.model_pattern.replace(/%/g, '').toLowerCase();
+      if (lower.includes(pattern)) return p;
+    }
+    return null;
+  }
+
+  function formatPricePerMillion(costPerToken) {
+    const perMillion = costPerToken * 1_000_000;
+    if (perMillion < 0.01) return '<$0.01';
+    return '$' + perMillion.toFixed(2);
+  }
+
   async function loadCostModelDonut() {
     try {
       const data = await apiFetch('/api/cost/models');
@@ -1229,6 +1272,9 @@
     await Promise.allSettled([
       loadTimeSeriesData(),
       fetchModelData(),
+      loadPricingData(),
+      loadCostModelDonut(),
+      loadCostAgentDonut(),
     ]);
 
     await Promise.allSettled([
@@ -1244,8 +1290,6 @@
       loadLatencyChart(),
       loadCumulativeChart(),
       loadCostChart(),
-      loadCostModelDonut(),
-      loadCostAgentDonut(),
     ]);
 
     dom.btnRefresh.classList.remove('spinning');

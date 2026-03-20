@@ -490,6 +490,56 @@ body::before {
   color: var(--primary);
 }
 
+.has-pricing-tooltip {
+  position: relative;
+  cursor: help;
+}
+
+.has-pricing-tooltip::after {
+  content: attr(data-input-price) '/1M in  ·  ' attr(data-output-price) '/1M out';
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  padding: 0.5rem 0.75rem;
+  background: rgba(10, 10, 26, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  transform: translateX(-50%) translateY(4px);
+  z-index: 50;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.has-pricing-tooltip::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(10, 10, 26, 0.95);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 51;
+}
+
+.has-pricing-tooltip:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.has-pricing-tooltip:hover::before {
+  opacity: 1;
+}
+
 /* --- Skeleton Loading --- */
 .skeleton {
   display: inline-block;

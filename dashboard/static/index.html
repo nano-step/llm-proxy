@@ -15,7 +15,7 @@
     <header class="header">
       <div class="header-left">
         <div class="logo">
-          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
             <rect width="28" height="28" rx="8" fill="#6366f1"/>
             <path d="M8 20V8h3v9h6v3H8z" fill="white"/>
           </svg>
@@ -34,8 +34,8 @@
           <span class="pulse-dot"></span>
           <span class="refresh-text">Refreshing in <span id="countdown">60</span>s</span>
         </div>
-        <button class="btn-refresh" id="btnRefresh" title="Refresh now">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+        <button class="btn-refresh" id="btnRefresh" type="button" title="Refresh now">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
             <path d="M13.65 2.35A8 8 0 1 0 16 8h-2a6 6 0 1 1-1.76-4.24L10 6h6V0l-2.35 2.35z"/>
           </svg>
         </button>
@@ -45,7 +45,7 @@
     <!-- Agent Filter Banner -->
     <div class="filter-banner" id="filterBanner">
       <span>Filtering by agent: <strong id="filterAgentName"></strong></span>
-      <button class="btn-clear-filter" id="btnClearFilter">Clear filter</button>
+      <button class="btn-clear-filter" id="btnClearFilter" type="button">Clear filter</button>
     </div>
 
     <!-- All-Time Summary Cards -->
@@ -53,7 +53,7 @@
     <section class="cards-grid cards-grid-alltime" id="alltimeCardsGrid">
       <div class="card card-alltime-tokens">
         <div class="card-icon">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none">
             <rect x="3" y="10" width="4" height="8" rx="1" fill="#818cf8"/>
             <rect x="8" y="6" width="4" height="12" rx="1" fill="#818cf8" opacity="0.7"/>
             <rect x="13" y="2" width="4" height="16" rx="1" fill="#818cf8" opacity="0.5"/>
@@ -73,7 +73,7 @@
 
       <div class="card card-alltime-requests">
         <div class="card-icon">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none">
             <path d="M10 2L2 7l8 5 8-5-8-5z" fill="#34d399" opacity="0.5"/>
             <path d="M2 10l8 5 8-5" stroke="#34d399" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             <path d="M2 13l8 5 8-5" stroke="#34d399" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -89,13 +89,13 @@
 
       <div class="card card-alltime-latency">
         <div class="card-icon">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none">
             <circle cx="10" cy="10" r="7" stroke="#fbbf24" stroke-width="1.5"/>
             <path d="M10 6v4l3 2" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </div>
         <div class="card-content">
-          <span class="card-label">Avg Latency</span>
+          <span class="card-label">Avg Response Time</span>
           <span class="card-value" id="alltimeLatency">
             <span class="skeleton skeleton-text"></span>
           </span>
@@ -104,7 +104,7 @@
 
       <div class="card card-alltime-since">
         <div class="card-icon">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none">
             <rect x="3" y="4" width="14" height="13" rx="2" stroke="#c084fc" stroke-width="1.5"/>
             <path d="M3 8h14" stroke="#c084fc" stroke-width="1.5"/>
             <path d="M7 2v4M13 2v4" stroke="#c084fc" stroke-width="1.5" stroke-linecap="round"/>
@@ -124,7 +124,7 @@
     <section class="cards-grid cards-grid-cost" id="costCardsGrid">
       <div class="card card-cost-today">
         <div class="card-icon">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none">
             <circle cx="10" cy="10" r="7" stroke="#10b981" stroke-width="1.5"/>
             <path d="M10 6v8M8 8.5h4c.6 0 1 .4 1 1s-.4 1-1 1H8c-.6 0-1 .4-1 1s.4 1 1 1h4" stroke="#10b981" stroke-width="1.2" stroke-linecap="round"/>
           </svg>
@@ -143,7 +143,7 @@
 
       <div class="card card-cost-alltime">
         <div class="card-icon">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none">
             <circle cx="10" cy="10" r="7" stroke="#10b981" stroke-width="1.5"/>
             <path d="M10 6v8M8 8.5h4c.6 0 1 .4 1 1s-.4 1-1 1H8c-.6 0-1 .4-1 1s.4 1 1 1h4" stroke="#10b981" stroke-width="1.2" stroke-linecap="round"/>
             <circle cx="10" cy="10" r="9" stroke="#10b981" stroke-width="0.5" stroke-dasharray="2 2"/>
@@ -166,7 +166,7 @@
     <section class="cards-grid" id="cardsGrid">
       <div class="card card-tokens">
         <div class="card-icon">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none">
             <path d="M3 3h14v14H3V3zm2 2v10h10V5H5z" fill="#6366f1"/>
             <path d="M7 9h6M7 12h4" stroke="#6366f1" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
@@ -185,7 +185,7 @@
 
       <div class="card card-requests">
         <div class="card-icon">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none">
             <path d="M10 2L2 7l8 5 8-5-8-5zM2 13l8 5 8-5" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </div>
@@ -199,7 +199,7 @@
 
       <div class="card card-agent">
         <div class="card-icon">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none">
             <circle cx="10" cy="7" r="4" stroke="#f59e0b" stroke-width="1.5"/>
             <path d="M3 18c0-3.87 3.13-7 7-7s7 3.13 7 7" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
@@ -215,7 +215,7 @@
 
       <div class="card card-model">
         <div class="card-icon">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none">
             <rect x="2" y="4" width="16" height="12" rx="2" stroke="#a78bfa" stroke-width="1.5"/>
             <path d="M6 10h8M6 13h5" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
@@ -261,7 +261,7 @@
 
     <section class="charts-grid charts-grid-metrics">
       <div class="card card-chart">
-        <div class="card-header"><h2>Response Latency</h2></div>
+        <div class="card-header"><h2>Avg Response Time</h2></div>
         <div class="chart-container"><canvas id="latencyChart"></canvas></div>
       </div>
       <div class="card card-chart">
@@ -360,12 +360,12 @@
 
     <!-- Error Toast -->
     <div class="error-toast" id="errorToast">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="#ef4444">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="#ef4444">
         <circle cx="8" cy="8" r="7" stroke="#ef4444" stroke-width="1.5" fill="none"/>
         <path d="M8 4v5M8 11v1" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round"/>
       </svg>
       <span id="errorMessage">Failed to load data</span>
-      <button class="btn-dismiss" id="btnDismissError">&times;</button>
+      <button class="btn-dismiss" id="btnDismissError" type="button">&times;</button>
     </div>
   </div>
 

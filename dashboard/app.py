@@ -301,7 +301,7 @@ async def get_hourly(days: int = Query(1, ge=1, le=30)) -> Dict[str, List[Dict[s
             ROUND(AVG(duration_ms)) as avg_duration_ms,
             COUNT(*) as requests
         FROM usage_log
-        WHERE timestamp >= ?
+        WHERE timestamp >= ? AND total_tokens > 0
         GROUP BY hour
         ORDER BY hour
     """, (start_time,))
@@ -339,7 +339,7 @@ async def get_daily(days: int = Query(30, ge=1, le=365)) -> Dict[str, List[Dict[
             ROUND(AVG(duration_ms)) as avg_duration_ms,
             COUNT(*) as requests
         FROM usage_log
-        WHERE DATE(timestamp) >= ?
+        WHERE DATE(timestamp) >= ? AND total_tokens > 0
         GROUP BY date
         ORDER BY date
     """, (start_date,))
@@ -375,6 +375,7 @@ def _fetch_alltime_data() -> Dict[str, Any]:
             MIN(timestamp),
             MAX(timestamp)
         FROM usage_log
+        WHERE total_tokens > 0
     """)
 
     row = cursor.fetchone()
@@ -413,7 +414,7 @@ async def get_latency(days: int = Query(1, ge=1, le=365)) -> Dict[str, List[Dict
                 ROUND(AVG(duration_ms)) as avg_duration_ms,
                 COUNT(*) as requests
             FROM usage_log
-            WHERE timestamp >= ?
+            WHERE timestamp >= ? AND total_tokens > 0
             GROUP BY hour
             ORDER BY hour
         """, (start_time,))
@@ -433,7 +434,7 @@ async def get_latency(days: int = Query(1, ge=1, le=365)) -> Dict[str, List[Dict
                 ROUND(AVG(duration_ms)) as avg_duration_ms,
                 COUNT(*) as requests
             FROM usage_log
-            WHERE timestamp >= ?
+            WHERE timestamp >= ? AND total_tokens > 0
             GROUP BY date
             ORDER BY date
         """, (start_time,))

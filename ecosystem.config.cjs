@@ -15,18 +15,19 @@ module.exports = {
     {
       name: "litellm-proxy",
       script: path.join(process.env.HOME, ".local/bin/litellm"),
-      args: `--config ${path.join(CWD, "litellm_config.yaml")} --port ${process.env.LITELLM_PORT || "4000"} --num_workers 1`,
+      args: `--config ${path.join(CWD, "litellm_config.yaml")} --port ${process.env.LITELLM_PORT || "4000"}`,
       cwd: CWD,
       interpreter: "none",
       env: {
         GITLAB_PAT: process.env.GITLAB_PAT,
         LITELLM_PORT: process.env.LITELLM_PORT || "4000",
         LITELLM_MASTER_KEY: process.env.LITELLM_MASTER_KEY,
+        PYTHONPATH: CWD,
       },
       autorestart: true,
-      max_restarts: 10,
-      min_uptime: "10s",
-      restart_delay: 5000,
+      max_restarts: 50,
+      min_uptime: "5s",
+      restart_delay: 3000,
 
       error_file: path.join(CWD, "litellm-error.log"),
       out_file: path.join(CWD, "litellm-out.log"),

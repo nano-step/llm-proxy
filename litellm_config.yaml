@@ -2,7 +2,9 @@ general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
 
 litellm_settings:
-  callbacks: gitlab_token_callback.proxy_handler_instance
+  callbacks:
+    - gitlab_token_callback.proxy_handler_instance
+    - token_logger.token_logger_instance
 
 model_list:
   - model_name: gitlab/claude-sonnet-4-6

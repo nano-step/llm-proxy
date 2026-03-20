@@ -68,6 +68,12 @@ def write_config(token_data):
     config = {
         "model_list": gitlab_models + copilot_models,
         "general_settings": {"master_key": MASTER_KEY},
+        "litellm_settings": {
+            "callbacks": [
+                "gitlab_token_callback.proxy_handler_instance",
+                "token_logger.token_logger_instance",
+            ],
+        },
     }
     with open(CONFIG_PATH, "w") as f:
         yaml.dump(config, f, default_flow_style=False)

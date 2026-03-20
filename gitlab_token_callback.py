@@ -1,4 +1,8 @@
-"""GitLab OIDC token callback — inline token refresh via async_pre_call_hook."""
+"""GitLab OIDC token callback — inline token refresh via async_pre_call_hook.
+
+Proactively refreshes tokens before expiry (300s skew) and reactively
+invalidates on 401 so the next request auto-heals with a fresh token.
+"""
 import asyncio
 import json
 import logging
@@ -31,6 +35,11 @@ class GitLabTokenManager:
     @property
     def needs_refresh(self) -> bool:
         return time.time() >= (self._expires_at - REFRESH_SKEW_SEC)
+
+    def invalidate(self):
+        """Force next get_headers() to fetch a fresh token."""
+        self._expires_at = 0.0
+        logger.info("[gitlab-token] invalidated — next call will refresh")
 
     def _fetch_token_sync(self) -> dict:
         body = json.dumps({
@@ -106,6 +115,25 @@ class GitLabOIDCCallback(CustomLogger):
         data["extra_headers"].update(headers)
 
         return data
+
+    async def async_log_failure_event(self, kwargs, response_obj, start_time, end_time):
+        """On 401/auth failure, invalidate token so next request gets a fresh one."""
+        try:
+            status = getattr(response_obj, "status_code", None)
+            error_str = str(response_obj) if response_obj else ""
+
+            is_auth_failure = (
+                status == 401
+                or "401" in error_str
+                or "Unauthorized" in error_str
+                or "AuthenticationError" in error_str
+                or "Forbidden by auth provider" in error_str
+            )
+
+            if is_auth_failure:
+                self.token_manager.invalidate()
+        except Exception as e:
+            logger.warning("[gitlab-token] error in failure handler: %s", e)
 
 
 proxy_handler_instance = GitLabOIDCCallback()

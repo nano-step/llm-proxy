@@ -56,16 +56,26 @@ sequenceDiagram
 
     CB-->>L: data with extra_headers injected
     L->>GL: API call with fresh OIDC headers
-    GL-->>L: LLM response
-    L-->>C: OpenAI-format response
+
+    alt Success
+        GL-->>L: LLM response
+        L-->>C: OpenAI-format response
+    else 401 Auth Failure (reactive invalidation)
+        GL-->>L: 401 Unauthorized
+        L->>CB: async_log_failure_event(kwargs)
+        CB->>Cache: invalidate (expires_at = 0)
+        L-->>C: error response (caller retries)
+        Note over C,Cache: Next request auto-heals:<br/>async_pre_call_hook sees expired token,<br/>fetches fresh one from GitLab OIDC
+    end
 ```
 
 The callback (`gitlab_token_callback.py`) uses LiteLLM's `CustomLogger.async_pre_call_hook` to:
 - Cache OIDC tokens in memory
 - Refresh 5 minutes before expiry (single-flight via `asyncio.Lock`)
 - Fall back to last-known-good token if refresh fails
+- Reactively invalidate the cached token on 401 auth failures (`async_log_failure_event` sets expiry to 0, so the next request's `async_pre_call_hook` fetches a fresh token automatically). The failed request itself is not retried — callers retry at their level.
 
-Zero restarts. Zero cron jobs. Token stays fresh forever.
+Zero restarts. Zero cron jobs. Token stays fresh automatically, and recovers after auth failures.
 
 ## Why not call GitLab Duo directly?
 
@@ -134,12 +144,12 @@ curl http://localhost:4000/v1/chat/completions \
 
 | File | Purpose |
 |---|---|
-| `gitlab_token_callback.py` | OIDC token manager + LiteLLM callback |
-| `litellm_config.yaml` | Model definitions and callback registration |
+| `gitlab_token_callback.py` | OIDC token manager + LiteLLM callback (proactive refresh + reactive 401 invalidation) |
+| `litellm_config.yaml` | Model definitions + callback registration (`[gitlab_token_callback.proxy_handler_instance, token_logger.token_logger_instance]`) |
 | `ecosystem.config.cjs` | PM2 process config (reads `.env`) |
 | `.env` | Secrets (gitignored) |
-| `proxy.py` | Legacy wrapper (kept for reference) |
-| `token_db.py` / `token_logger.py` | Token usage logging to SQLite |
+| `proxy.py` | Legacy wrapper (`write_config()` preserves callbacks section) |
+| `token_db.py` / `token_logger.py` | Token usage logging to SQLite; `token_logger.py` is an active callback in config |
 
 ## Environment variables
 

@@ -699,9 +699,10 @@ REDACT_PATTERNS = (
 
 class SecretGuardrail(CustomLogger):
 
-    def __init__(self, action: str = "redact"):
+    def __init__(self, action: str = "redact", check_injection: bool = False):
         super().__init__()
-        self.action = action  # "redact" (default) | "block"
+        self.action = action
+        self.check_injection = check_injection
 
     def _find_secrets(self, content: str) -> list[str]:
         findings = []
@@ -766,10 +767,11 @@ class SecretGuardrail(CustomLogger):
                                 text_blocks.append(text)
 
                 for text_content in text_blocks:
-                    injection = self._check_injection(text_content)
-                    if injection:
-                        logger.warning("[secret-guardrail] BLOCKED — injection detected: %s", injection)
-                        raise PermissionError("Blocked: request violates content policy.")
+                    if self.check_injection:
+                        injection = self._check_injection(text_content)
+                        if injection:
+                            logger.warning("[secret-guardrail] BLOCKED — injection detected: %s", injection)
+                            raise PermissionError("Blocked: request violates content policy.")
 
                     findings = self._find_secrets(text_content)
                     if findings:
@@ -798,4 +800,5 @@ class SecretGuardrail(CustomLogger):
 
 guardrail_instance = SecretGuardrail(
     action=os.environ.get("SECRET_GUARDRAIL_ACTION", "redact"),
+    check_injection=os.environ.get("SECRET_GUARDRAIL_CHECK_INJECTION", "false").lower() == "true",
 )

@@ -280,12 +280,10 @@ scp -r ~/.config/litellm/github_copilot/ user@server:~/.config/litellm/github_co
 | `ecosystem.config.cjs` | PM2 process config (reads `.env`) |
 | `.env` | Secrets (gitignored) — GITLAB_PAT, DATABASE_URL, UI_USERNAME, UI_PASSWORD, etc. |
 | `proxy.py` | Legacy wrapper (`write_config()` preserves callbacks section) |
-| `token_db.py` / `token_logger.py` | Token usage logging to SQLite; `token_logger.py` is an active callback in config |
 | `secret_guardrail.py` | Output-level secret detection: regex patterns, vault matching, entropy analysis, prompt injection blocking |
 | `side_channel_detector.py` | Pre-execution AST taint analysis: detects indirect secret leakage via side-channels (5 languages) |
 | `test_secret_guardrail.py` | Tests for secret guardrail |
 | `test_side_channel_detector.py` | Tests for side-channel detector (80 tests) |
-| `migrate_spend_logs.py` | One-time migration script: SQLite usage.db → PostgreSQL LiteLLM_SpendLogs |
 
 ## Environment variables
 

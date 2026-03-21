@@ -70,7 +70,6 @@ def write_config(token_data):
         "litellm_settings": {
             "callbacks": [
                 "gitlab_token_callback.proxy_handler_instance",
-                "token_logger.token_logger_instance",
                 "secret_guardrail.guardrail_instance",
             ],
         },

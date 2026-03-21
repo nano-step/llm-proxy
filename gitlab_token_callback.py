@@ -108,6 +108,10 @@ class GitLabOIDCCallback(CustomLogger):
         data: dict,
         call_type,
     ):
+        model = data.get("model", "") or ""
+        if not model.startswith("gitlab/"):
+            return data
+
         headers = await self.token_manager.get_headers()
 
         if "extra_headers" not in data or data["extra_headers"] is None:

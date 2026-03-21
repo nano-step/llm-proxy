@@ -100,6 +100,7 @@ With the proxy, clients just use the standard OpenAI SDK with a single API key. 
 ### Prerequisites
 
 - Python 3.10+
+- PostgreSQL 14+ (for admin dashboard)
 - [LiteLLM](https://github.com/BerriAI/litellm): `pip install litellm`
 - [PM2](https://pm2.keymetrics.io/): `npm install -g pm2`
 
@@ -114,6 +115,10 @@ cp .env.example .env
 #   GITLAB_PAT=glpat-your-token-here
 #   LITELLM_MASTER_KEY=your-api-key
 #   LITELLM_PORT=4000
+#   DATABASE_URL=postgresql://user:pass@host:5432/litellm
+#   UI_USERNAME=admin
+#   UI_PASSWORD=your-dashboard-password
+#   STORE_MODEL_IN_DB=True
 ```
 
 ### 2. Configure models
@@ -140,16 +145,31 @@ curl http://localhost:4000/v1/chat/completions \
   -d '{"model": "gitlab/claude-haiku-4-5", "messages": [{"role": "user", "content": "Hello"}]}'
 ```
 
+## Admin Dashboard
+
+Access the built-in LiteLLM Admin UI at:
+
+```
+https://litellm.thnkandgrow.com/ui/
+```
+
+Login with:
+- **Username:** `admin`
+- **Password:** set via `UI_PASSWORD` env var (default: `openclaw2026`)
+
+The dashboard provides spend tracking, virtual key management, model management, and usage analytics.
+
 ## Files
 
 | File | Purpose |
 |---|---|
 | `gitlab_token_callback.py` | OIDC token manager + LiteLLM callback (proactive refresh + reactive 401 invalidation) |
-| `litellm_config.yaml` | Model definitions + callback registration (`[gitlab_token_callback.proxy_handler_instance, token_logger.token_logger_instance]`) |
+| `litellm_config.yaml` | Model definitions + callback registration + DB config |
 | `ecosystem.config.cjs` | PM2 process config (reads `.env`) |
-| `.env` | Secrets (gitignored) |
+| `.env` | Secrets (gitignored) — GITLAB_PAT, DATABASE_URL, UI_USERNAME, UI_PASSWORD, etc. |
 | `proxy.py` | Legacy wrapper (`write_config()` preserves callbacks section) |
 | `token_db.py` / `token_logger.py` | Token usage logging to SQLite; `token_logger.py` is an active callback in config |
+| `migrate_spend_logs.py` | One-time migration script: SQLite usage.db → PostgreSQL LiteLLM_SpendLogs |
 
 ## Environment variables
 
@@ -159,3 +179,7 @@ curl http://localhost:4000/v1/chat/completions \
 | `LITELLM_MASTER_KEY` | Yes | API key clients use to authenticate to the proxy |
 | `LITELLM_PORT` | No | Proxy port (default: 4000) |
 | `GITLAB_INSTANCE` | No | GitLab instance URL (default: https://gitlab.com) |
+| `DATABASE_URL` | Yes (for dashboard) | PostgreSQL connection string (e.g. `postgresql://user:pass@host:5432/litellm`) |
+| `UI_USERNAME` | No | Admin dashboard username (default: `admin`) |
+| `UI_PASSWORD` | No | Admin dashboard password |
+| `STORE_MODEL_IN_DB` | No | Store model configs in DB (default: `True`) |

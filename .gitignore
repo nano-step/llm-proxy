@@ -19,3 +19,4 @@ __pycache__/
 # Old configs
 config.yaml
 ecosystem.config.js
+test_guardrail.py

@@ -1,0 +1,14 @@
+module.exports = {
+  apps: [
+    {
+      name: "litellm-proxy",
+      script: "/home/deployer/litellm/proxy.py",
+      interpreter: "python3",
+      cwd: "/home/deployer/litellm",
+      watch: false,
+      autorestart: true,
+      max_restarts: 10,
+      restart_delay: 5000,
+    },
+  ],
+};

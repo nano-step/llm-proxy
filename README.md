@@ -1,6 +1,6 @@
 # LLM Proxy
 
-LiteLLM-based proxy that routes OpenAI-compatible requests to GitLab Duo (and soon GitHub Models). Handles OIDC token refresh inline — no cron jobs, no restarts.
+LiteLLM-based proxy that routes OpenAI-compatible requests to GitLab Duo and GitHub Copilot. Handles OIDC token refresh (GitLab) and OAuth device flow (GitHub) — no cron jobs, no restarts.
 
 ## How it works
 
@@ -20,7 +20,7 @@ flowchart LR
 
     subgraph Providers
         G["GitLab Duo API<br/>cloud.gitlab.com"]
-        H["GitHub Models<br/>(planned)"]
+        H["GitHub Copilot API<br/>api.githubcopilot.com"]
     end
 
     A & B & C -->|OpenAI-compatible| D
@@ -30,8 +30,8 @@ flowchart LR
     E -->|expired?| G2["GitLab OIDC<br/>/api/v4/ai/..."]
     G2 -->|new token| F
     E -->|inject headers| D
-    D -->|authenticated| G
-    D -.->|future| H
+    D -->|gitlab/* models| G
+    D -->|copilot/* models| H
 ```
 
 ```mermaid
@@ -123,11 +123,18 @@ cp .env.example .env
 
 ### 2. Configure models
 
-Edit `litellm_config.yaml` to add/remove models. Each model needs:
+Edit `litellm_config.yaml` to add/remove models.
+
+**GitLab Duo models** need:
 - `model_name`: what clients use (e.g., `gitlab/claude-sonnet-4-6`)
 - `model`: upstream provider model ID
 - `api_base`: provider endpoint
 - `api_key`: set to `gitlab-oidc` (actual auth handled by callback)
+
+**GitHub Copilot models** need:
+- `model_name`: what clients use (e.g., `copilot/gpt-4.1`)
+- `model`: `github_copilot/<model-id>` (LiteLLM handles auth automatically)
+- No `api_base` or `api_key` needed — resolved via OAuth device flow
 
 ### 3. Start
 
@@ -159,6 +166,111 @@ Login with:
 
 The dashboard provides spend tracking, virtual key management, model management, and usage analytics.
 
+## GitHub Copilot Authentication
+
+GitHub Copilot models (`copilot/*`, `copilot-premium/*`, `copilot-responses/*`, `copilot-embedding/*`) use **OAuth 2.0 Device Flow** — no manual token generation required.
+
+### Prerequisites
+
+- GitHub account with an active Copilot subscription (Free, Pro, Pro+, Business, or Enterprise)
+- Browser access for one-time device flow authentication
+
+### First-time setup
+
+1. Start the proxy normally (`pm2 start ecosystem.config.cjs`)
+
+2. Send a request to any Copilot model:
+
+```bash
+curl http://localhost:4000/v1/chat/completions \
+  -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "copilot/gpt-4.1", "messages": [{"role": "user", "content": "Hello"}]}'
+```
+
+3. LiteLLM prints a device code to the console:
+
+```
+Please visit https://github.com/login/device and enter code XXXX-XXXX to authenticate.
+```
+
+4. Open `https://github.com/login/device` in a browser, enter the code, and authorize
+
+5. Authentication completes automatically — tokens are stored at `~/.config/litellm/github_copilot/`
+
+### How auth works under the hood
+
+```mermaid
+sequenceDiagram
+    participant P as LiteLLM Proxy
+    participant GH as GitHub OAuth
+    participant U as User Browser
+    participant API as Copilot API
+
+    Note over P: First request to copilot/* model
+    P->>GH: POST /login/device/code (scope: read:user)
+    GH-->>P: device_code + user_code
+    P->>P: Print "Visit github.com/login/device, enter XXXX-XXXX"
+    U->>GH: Enter code + authorize
+    P->>GH: Poll /login/oauth/access_token (every 5s, max 1 min)
+    GH-->>P: access_token (gho_...)
+    P->>API: POST /copilot_internal/v2/token
+    API-->>P: Copilot API key + endpoint + expiry
+    P->>P: Store tokens to ~/.config/litellm/github_copilot/
+    Note over P: Subsequent requests use cached tokens
+    Note over P: API key auto-refreshes on expiry
+```
+
+### Token storage
+
+```
+~/.config/litellm/github_copilot/
+├── access-token     # OAuth access token (gho_...), long-lived
+└── api-key.json     # Copilot API key + endpoint, auto-refreshed
+```
+
+### Copilot tiers and premium requests
+
+| Tier | Cost | Premium Requests/Month | API Endpoint |
+|---|---|---|---|
+| Free | $0 | 50 | `api.githubcopilot.com` |
+| Pro | $10/mo | 300 | `api.githubcopilot.com` |
+| Pro+ | $39/mo | 1,500 | `api.githubcopilot.com` |
+| Business | $19/user/mo | 300 | `api.business.githubcopilot.com` |
+| Enterprise | $39/user/mo | 1,000 | `api.enterprise.githubcopilot.com` |
+
+LiteLLM auto-detects the correct API endpoint from your subscription tier.
+
+Models under `copilot-premium/*` (Claude, Gemini, etc.) consume premium requests. Standard `copilot/*` models (GPT-4o, GPT-3.5-turbo) are unlimited.
+
+### CI/CD and headless environments
+
+The device flow requires a browser, so for non-interactive environments, pre-authenticate on a local machine and copy the tokens:
+
+```bash
+# On a machine with a browser:
+# 1. Trigger auth by making a request (see First-time setup above)
+# 2. Copy tokens to the server:
+scp -r ~/.config/litellm/github_copilot/ user@server:~/.config/litellm/github_copilot/
+```
+
+### Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| "No API key file found" | Make a request to trigger device flow, complete browser auth |
+| "API key expired" | Auto-refreshes. If stuck: delete `~/.config/litellm/github_copilot/api-key.json`, retry |
+| "Bad credentials" (401) | Delete `~/.config/litellm/github_copilot/access-token`, re-authenticate |
+| Wrong API endpoint | Delete `api-key.json` — re-fetches correct endpoint for your tier |
+
+### Optional environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `GITHUB_COPILOT_TOKEN_DIR` | `~/.config/litellm/github_copilot` | Token storage directory |
+| `GITHUB_COPILOT_ACCESS_TOKEN_FILE` | `access-token` | Access token filename |
+| `GITHUB_COPILOT_API_KEY_FILE` | `api-key.json` | API key JSON filename |
+
 ## Files
 
 | File | Purpose |
@@ -187,6 +299,7 @@ The dashboard provides spend tracking, virtual key management, model management,
 | `UI_USERNAME` | No | Admin dashboard username (default: `admin`) |
 | `UI_PASSWORD` | No | Admin dashboard password |
 | `STORE_MODEL_IN_DB` | No | Store model configs in DB (default: `True`) |
+| `GITHUB_COPILOT_TOKEN_DIR` | No | GitHub Copilot token storage path (default: `~/.config/litellm/github_copilot`) |
 
 ## Security: Secret Protection
 

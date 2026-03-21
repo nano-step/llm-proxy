@@ -5,7 +5,7 @@ general_settings:
 
 litellm_settings:
   num_retries: 2
-  request_timeout: 60
+  request_timeout: 120
   allowed_fails: 3
   cooldown_time: 30
   callbacks:

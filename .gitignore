@@ -20,3 +20,4 @@ __pycache__/
 config.yaml
 ecosystem.config.js
 test_guardrail.py
+test_secret_guardrail.py

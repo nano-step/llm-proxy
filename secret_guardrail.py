@@ -7,6 +7,13 @@ Decision policy:
 """
 import os
 import re
+import time
+import unicodedata
+import base64
+import math
+import urllib.parse
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Tuple
 from litellm.integrations.custom_logger import CustomLogger
 
 logger = __import__("logging").getLogger("litellm.secret_guardrail")
@@ -693,49 +700,361 @@ REDACT_PATTERNS = (
 )
 
 
+class NormalizationPipeline:
+    _B64_RE = re.compile(r'[A-Za-z0-9+/=_-]{16,}')
+    _HEX_RE = re.compile(r'[a-fA-F0-9]{32,}')
+    _MAX_DECODE_SEGMENTS = 10
+    _MAX_DECODE_BYTES = 1024
+
+    def generate_views(self, text: str) -> Dict[str, str]:
+        stripped = ''.join(c for c in text if unicodedata.category(c) != 'Cf')
+        nfkc = unicodedata.normalize('NFKC', stripped)
+        unicode_norm = nfkc.casefold()
+        ws_collapsed = re.sub(r'\s+', '', unicode_norm)
+        alnum = re.sub(r'[^a-z0-9]', '', ws_collapsed)
+        decode_parts = [urllib.parse.unquote(nfkc)]
+        decode_parts.extend(self._decode_b64_segments(nfkc))
+        decode_parts.extend(self._decode_hex_segments(nfkc))
+        decoded = '\n'.join(p.casefold() for p in decode_parts)
+
+        return {
+            'unicode_normalized': unicode_norm,
+            'whitespace_collapsed': ws_collapsed,
+            'alnum_only': alnum,
+            'decode_attempted': decoded,
+        }
+
+    def _decode_b64_segments(self, text: str) -> List[str]:
+        results = []
+        for i, m in enumerate(self._B64_RE.finditer(text)):
+            if i >= self._MAX_DECODE_SEGMENTS:
+                break
+            seg = m.group()
+            for decoder in (base64.b64decode, base64.urlsafe_b64decode):
+                try:
+                    pad = seg + '=' * (-len(seg) % 4)
+                    raw = decoder(pad)
+                    if len(raw) > self._MAX_DECODE_BYTES:
+                        raw = raw[:self._MAX_DECODE_BYTES]
+                    decoded = raw.decode('utf-8', errors='ignore')
+                    if decoded and any(c.isprintable() for c in decoded):
+                        results.append(decoded)
+                        break
+                except Exception:
+                    continue
+        return results
+
+    def _decode_hex_segments(self, text: str) -> List[str]:
+        results = []
+        for i, m in enumerate(self._HEX_RE.finditer(text)):
+            if i >= self._MAX_DECODE_SEGMENTS:
+                break
+            seg = m.group()
+            try:
+                raw = bytes.fromhex(seg)
+                if len(raw) > self._MAX_DECODE_BYTES:
+                    raw = raw[:self._MAX_DECODE_BYTES]
+                decoded = raw.decode('utf-8', errors='ignore')
+                if decoded:
+                    results.append(decoded)
+            except Exception:
+                continue
+        return results
+
+
+@dataclass
+class VaultMatch:
+    secret_id: str
+    confidence: float
+    detector: str
+
+
+class SecretVault:
+    _ALLOWLISTED_ENV_KEYS = {
+        'LITELLM_MASTER_KEY', 'GITLAB_PAT', 'DATABASE_URL', 'UI_PASSWORD',
+    }
+    _ALLOWLISTED_ENV_PATTERNS = ('_API_KEY', '_SECRET', '_TOKEN')
+    _SECRET_KEYWORDS = {'key', 'token', 'secret', 'password', 'credential', 'api', 'auth', 'bearer'}
+    _KGRAM_K = 8
+    _MIN_SECRET_LEN = 8
+    _TOKEN_RELOAD_INTERVAL = 60
+
+    def __init__(self, env_path: str = '', token_path: str = '', headers_path: str = ''):
+        self._normalizer = NormalizationPipeline()
+        self._secrets: Dict[str, Dict[str, str]] = {}
+        self._kgram_index: Dict[str, set] = {}
+        self._token_path = token_path
+        self._token_mtime: float = 0.0
+        self._last_token_check: float = 0.0
+
+        self._load_env_file(env_path)
+        self._load_env_vars()
+        self._load_token_file(token_path)
+        self._load_headers_file(headers_path)
+        self._build_kgram_index()
+        logger.info('[secret-vault] loaded %d secrets', len(self._secrets))
+
+    def _add_secret(self, secret_id: str, value: str):
+        value = value.strip()
+        if len(value) < self._MIN_SECRET_LEN:
+            return
+        views = self._normalizer.generate_views(value)
+        self._secrets[secret_id] = {
+            'raw': value,
+            'normalized': views['unicode_normalized'],
+            'alnum': views['alnum_only'],
+        }
+
+    def _load_env_file(self, path: str):
+        if not path or not os.path.isfile(path):
+            logger.warning('[secret-vault] env file not found: %s', path)
+            return
+        try:
+            with open(path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith('#'):
+                        continue
+                    if '=' not in line:
+                        continue
+                    key, _, val = line.partition('=')
+                    key = key.strip()
+                    val = val.strip()
+                    self._add_secret(f'env:{key}', val)
+        except Exception as e:
+            logger.warning('[secret-vault] error loading env file: %s', e)
+
+    def _load_env_vars(self):
+        for key, val in os.environ.items():
+            if key in self._ALLOWLISTED_ENV_KEYS or any(key.endswith(p) for p in self._ALLOWLISTED_ENV_PATTERNS):
+                self._add_secret(f'os:{key}', val)
+
+    def _load_token_file(self, path: str):
+        if not path or not os.path.isfile(path):
+            return
+        try:
+            self._token_mtime = os.path.getmtime(path)
+            self._last_token_check = time.time()
+            with open(path) as f:
+                token = f.read().strip()
+            self._add_secret('file:.token', token)
+        except Exception as e:
+            logger.warning('[secret-vault] error loading token file: %s', e)
+
+    def _load_headers_file(self, path: str):
+        if not path or not os.path.isfile(path):
+            return
+        try:
+            import json as _json
+            with open(path) as f:
+                headers = _json.load(f)
+            auth = headers.get('Authorization', '')
+            if auth:
+                self._add_secret('file:.headers:Authorization', auth)
+        except Exception as e:
+            logger.warning('[secret-vault] error loading headers file: %s', e)
+
+    def _build_kgram_index(self):
+        self._kgram_index.clear()
+        for sid, forms in self._secrets.items():
+            alnum = forms['alnum']
+            if len(alnum) < self._KGRAM_K:
+                continue
+            for i in range(len(alnum) - self._KGRAM_K + 1):
+                kg = alnum[i:i + self._KGRAM_K]
+                if kg not in self._kgram_index:
+                    self._kgram_index[kg] = set()
+                self._kgram_index[kg].add(sid)
+
+    def _maybe_reload_token(self):
+        if not self._token_path:
+            return
+        now = time.time()
+        if now - self._last_token_check < self._TOKEN_RELOAD_INTERVAL:
+            return
+        self._last_token_check = now
+        try:
+            mtime = os.path.getmtime(self._token_path)
+            if mtime != self._token_mtime:
+                self._load_token_file(self._token_path)
+                self._build_kgram_index()
+                logger.info('[secret-vault] reloaded token file')
+        except Exception:
+            pass
+
+    def match_views(self, views: Dict[str, str]) -> List[VaultMatch]:
+        self._maybe_reload_token()
+        matches = []
+        seen_ids = set()
+
+        for sid, forms in self._secrets.items():
+            for view_name in ('unicode_normalized', 'whitespace_collapsed', 'alnum_only', 'decode_attempted'):
+                view_text = views.get(view_name, '')
+                if not view_text:
+                    continue
+                form_key = 'alnum' if view_name == 'alnum_only' else 'normalized'
+                secret_form = forms.get(form_key, '')
+                if secret_form and secret_form in view_text and sid not in seen_ids:
+                    matches.append(VaultMatch(secret_id=sid, confidence=1.0, detector='vault_exact'))
+                    seen_ids.add(sid)
+
+            if sid in seen_ids:
+                continue
+            raw = forms.get('raw', '')
+            for view_name in ('unicode_normalized', 'whitespace_collapsed', 'decode_attempted'):
+                view_text = views.get(view_name, '')
+                if raw and raw in view_text and sid not in seen_ids:
+                    matches.append(VaultMatch(secret_id=sid, confidence=1.0, detector='vault_exact_raw'))
+                    seen_ids.add(sid)
+
+        alnum_view = views.get('alnum_only', '')
+        if alnum_view:
+            for sid, forms in self._secrets.items():
+                if sid in seen_ids:
+                    continue
+                alnum_secret = forms.get('alnum', '')
+                if len(alnum_secret) < self._KGRAM_K:
+                    continue
+                total_kgrams = len(alnum_secret) - self._KGRAM_K + 1
+                hit_count = 0
+                for i in range(len(alnum_view) - self._KGRAM_K + 1):
+                    kg = alnum_view[i:i + self._KGRAM_K]
+                    if kg in self._kgram_index and sid in self._kgram_index[kg]:
+                        hit_count += 1
+                coverage = hit_count / total_kgrams if total_kgrams > 0 else 0
+                if coverage >= 0.3:
+                    matches.append(VaultMatch(secret_id=sid, confidence=0.8, detector='vault_kgram'))
+                    seen_ids.add(sid)
+                elif coverage >= 0.2:
+                    text_lower = views.get('unicode_normalized', '')
+                    if any(kw in text_lower for kw in self._SECRET_KEYWORDS):
+                        matches.append(VaultMatch(secret_id=sid, confidence=0.7, detector='vault_kgram_ctx'))
+                        seen_ids.add(sid)
+
+        return matches
+
+
+@dataclass
+class RedactionEvent:
+    detector: str
+    secret_id: Optional[str]
+    confidence: float
+
+
+@dataclass
+class RedactionResult:
+    redacted_text: str
+    blocked: bool
+    events: List[RedactionEvent] = field(default_factory=list)
+
+
+class RedactionEngine:
+    def __init__(self, vault: SecretVault):
+        self._normalizer = NormalizationPipeline()
+        self._vault = vault
+
+    def scan_and_redact(self, text: str) -> RedactionResult:
+        if not text:
+            return RedactionResult(redacted_text=text, blocked=False)
+
+        views = self._normalizer.generate_views(text)
+        events: List[RedactionEvent] = []
+        blocked = False
+        redacted = text
+
+        vault_matches = self._vault.match_views(views)
+        for vm in vault_matches:
+            events.append(RedactionEvent(detector=vm.detector, secret_id=vm.secret_id, confidence=vm.confidence))
+            if vm.confidence >= 0.9:
+                blocked = True
+            forms = self._vault._secrets.get(vm.secret_id, {})
+            for form_val in (forms.get('raw', ''), forms.get('normalized', '')):
+                if form_val and form_val in redacted:
+                    redacted = redacted.replace(form_val, '[REDACTED_SECRET]')
+
+        for view_name in ('unicode_normalized', 'whitespace_collapsed'):
+            view_text = views.get(view_name, '')
+            if not view_text:
+                continue
+            for pattern, label in REDACT_PATTERNS:
+                if pattern.search(view_text) and not pattern.search(redacted):
+                    events.append(RedactionEvent(detector=f'regex_{view_name}', secret_id=label, confidence=0.6))
+
+        for pattern, label in REDACT_PATTERNS:
+            if pattern.search(redacted):
+                redacted = pattern.sub('[REDACTED_SECRET]', redacted)
+                events.append(RedactionEvent(detector='regex_raw', secret_id=label, confidence=0.8))
+
+        redacted = self._entropy_redact(redacted, events)
+
+        return RedactionResult(redacted_text=redacted, blocked=blocked, events=events)
+
+    def _entropy_redact(self, text: str, events: List[RedactionEvent]) -> str:
+        b64_re = re.compile(r'[A-Za-z0-9+/=_-]{32,}')
+        for m in b64_re.finditer(text):
+            s = m.group()
+            entropy = self._shannon_entropy(s)
+            if entropy >= 4.5:
+                events.append(RedactionEvent(detector='entropy_b64', secret_id=None, confidence=0.5))
+                text = text.replace(s, '[REDACTED_SECRET]', 1)
+
+        hex_re = re.compile(r'[a-fA-F0-9]{40,}')
+        for m in hex_re.finditer(text):
+            s = m.group()
+            entropy = self._shannon_entropy(s)
+            if entropy >= 3.0:
+                events.append(RedactionEvent(detector='entropy_hex', secret_id=None, confidence=0.5))
+                text = text.replace(s, '[REDACTED_SECRET]', 1)
+
+        return text
+
+    @staticmethod
+    def _shannon_entropy(s: str) -> float:
+        if not s:
+            return 0.0
+        from collections import Counter
+        counts = Counter(s)
+        length = len(s)
+        return -sum((c / length) * math.log2(c / length) for c in counts.values())
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # GUARDRAIL CLASS
 # ─────────────────────────────────────────────────────────────────────────────
 
 class SecretGuardrail(CustomLogger):
 
-    def __init__(self, action: str = "redact", check_injection: bool = False):
+    def __init__(self, action: str = "redact", check_injection: bool = True):
         super().__init__()
         self.action = action
         self.check_injection = check_injection
 
-    def _find_secrets(self, content: str) -> list[str]:
-        findings = []
-        for pattern, label in REDACT_PATTERNS:
-            if pattern.search(content):
-                findings.append(label)
-        # High-entropy checks
-        findings.extend(_high_entropy_base64(content))
-        findings.extend(_high_entropy_hex(content))
-        return findings
-
-    def _redact_all(self, content: str) -> str:
-        for pattern, _ in REDACT_PATTERNS:
-            content = pattern.sub("[REDACTED_SECRET]", content)
-        for match in _BASE64_ENTROPY_RE.finditer(content):
-            s = match.group()
-            if len(s) >= 32:
-                unique = len(set(s))
-                if unique >= 30:
-                    content = content.replace(s, "[REDACTED_SECRET]", 1)
-        for match in _HEX_ENTROPY_RE.finditer(content):
-            s = match.group()
-            if len(s) >= 40:
-                unique = len(set(s.lower()))
-                if unique >= 12:
-                    content = content.replace(s, "[REDACTED_SECRET]", 1)
-        return content
+        litellm_dir = os.path.dirname(os.path.abspath(__file__))
+        vault = SecretVault(
+            env_path=os.path.join(litellm_dir, ".env"),
+            token_path=os.path.join(litellm_dir, ".token"),
+            headers_path=os.path.join(litellm_dir, ".headers"),
+        )
+        self._engine = RedactionEngine(vault)
 
     def _check_injection(self, content: str) -> str | None:
         for pattern, label in INJECTION_PATTERNS:
             if pattern.search(content):
                 return label
         return None
+
+    def _extract_text_blocks(self, raw_content) -> list[str]:
+        if isinstance(raw_content, str):
+            return [raw_content]
+        if isinstance(raw_content, list):
+            blocks = []
+            for block in raw_content:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    text = block.get("text", "")
+                    if isinstance(text, str):
+                        blocks.append(text)
+            return blocks
+        return []
 
     async def async_pre_call_hook(
         self,
@@ -744,7 +1063,43 @@ class SecretGuardrail(CustomLogger):
         data,
         call_type,
     ):
+        if not (isinstance(call_type, str) and call_type in (
+            "chat_completion", "acompletion", "completion"
+        )):
+            return data
+
         messages = data.get("messages", [])
+
+        all_text_parts = []
+        for msg in messages:
+            if not isinstance(msg, dict):
+                continue
+            raw_content = msg.get("content", "")
+            if raw_content:
+                all_text_parts.extend(self._extract_text_blocks(raw_content))
+
+        if all_text_parts:
+            concatenated = "\n".join(all_text_parts)
+            normalizer = NormalizationPipeline()
+            concat_views = normalizer.generate_views(concatenated)
+            vault_matches = self._engine._vault.match_views(concat_views)
+            if vault_matches:
+                logger.warning(
+                    "[secret-guardrail] vault match in concatenated messages: %s",
+                    [m.secret_id for m in vault_matches],
+                )
+
+        extra_headers = data.get("extra_headers", {})
+        if extra_headers:
+            import json as _json
+            headers_text = _json.dumps(extra_headers, default=str)
+            headers_result = self._engine.scan_and_redact(headers_text)
+            if headers_result.events:
+                logger.warning(
+                    "[secret-guardrail] secrets detected in extra_headers (not redacted, needed for auth): %s",
+                    [e.secret_id for e in headers_result.events],
+                )
+
         for msg in messages:
             if not isinstance(msg, dict):
                 continue
@@ -752,53 +1107,90 @@ class SecretGuardrail(CustomLogger):
             if not raw_content:
                 continue
 
-            if isinstance(call_type, str) and call_type in (
-                "chat_completion", "acompletion", "completion"
-            ):
-                # Handle both string and multimodal (list) content
-                text_blocks = []
-                if isinstance(raw_content, str):
-                    text_blocks = [raw_content]
-                elif isinstance(raw_content, list):
-                    for block in raw_content:
-                        if isinstance(block, dict) and block.get("type") == "text":
-                            text = block.get("text", "")
-                            if isinstance(text, str):
-                                text_blocks.append(text)
+            msg_role = msg.get("role", "")
+            text_blocks = self._extract_text_blocks(raw_content)
 
-                for text_content in text_blocks:
-                    if self.check_injection:
-                        injection = self._check_injection(text_content)
-                        if injection:
-                            logger.warning("[secret-guardrail] BLOCKED — injection detected: %s", injection)
-                            raise PermissionError("Blocked: request violates content policy.")
+            for text_content in text_blocks:
+                if self.check_injection and msg_role == "user":
+                    injection = self._check_injection(text_content)
+                    if injection:
+                        logger.warning("[secret-guardrail] BLOCKED — injection detected: %s", injection)
+                        raise PermissionError("Blocked: request violates content policy.")
 
-                    findings = self._find_secrets(text_content)
-                    if findings:
-                        logger.warning(
-                            "[secret-guardrail] REDACTED secrets in prompt: %s. Action=%s",
-                            findings, self.action
+                result = self._engine.scan_and_redact(text_content)
+                if result.events:
+                    logger.warning(
+                        "[secret-guardrail] REDACTED secrets in prompt: %s. Action=%s",
+                        [e.secret_id for e in result.events], self.action,
+                    )
+                    if self.action == "block":
+                        raise PermissionError(
+                            "Blocked: prompt contains sensitive data. "
+                            "Do not share API keys, tokens, or secrets in prompts."
                         )
-                        if self.action == "block":
-                            raise PermissionError(
-                                "Blocked: prompt contains sensitive data. "
-                                "Do not share API keys, tokens, or secrets in prompts."
-                            )
-                        # Reconstruct content with redacted text
-                        redacted_text = self._redact_all(text_content)
-                        if isinstance(raw_content, str):
-                            msg["content"] = redacted_text
-                        elif isinstance(raw_content, list):
-                            for block in raw_content:
-                                if isinstance(block, dict) and block.get("type") == "text":
-                                    if block.get("text") == text_content:
-                                        block["text"] = redacted_text
-                                        break
+                    if isinstance(raw_content, str):
+                        msg["content"] = result.redacted_text
+                    elif isinstance(raw_content, list):
+                        for block in raw_content:
+                            if isinstance(block, dict) and block.get("type") == "text":
+                                if block.get("text") == text_content:
+                                    block["text"] = result.redacted_text
+                                    break
 
         return data
 
+    async def async_post_call_success_hook(self, data, user_api_key_dict, response):
+        try:
+            if not hasattr(response, "choices"):
+                return response
+
+            redacted_any = False
+            blocked = False
+
+            for choice in response.choices:
+                if not hasattr(choice, "message") or not hasattr(choice.message, "content"):
+                    continue
+                content = choice.message.content
+                if not content or not isinstance(content, str):
+                    continue
+
+                result = self._engine.scan_and_redact(content)
+
+                if result.blocked:
+                    blocked = True
+                    choice.message.content = (
+                        "[Response blocked: detected sensitive data in output. "
+                        "The requested information cannot be provided.]"
+                    )
+                    logger.warning(
+                        "[secret-guardrail] BLOCKED response — vault match: %s",
+                        [e.secret_id for e in result.events],
+                    )
+                elif result.events:
+                    redacted_any = True
+                    choice.message.content = result.redacted_text
+                    logger.warning(
+                        "[secret-guardrail] REDACTED secrets in response: %s",
+                        [e.secret_id for e in result.events],
+                    )
+
+            if blocked or redacted_any:
+                if not hasattr(response, "_hidden_params"):
+                    response._hidden_params = {}
+                if "additional_headers" not in response._hidden_params:
+                    response._hidden_params["additional_headers"] = {}
+                status = "blocked" if blocked else "redacted"
+                response._hidden_params["additional_headers"]["X-LiteLLM-Secrets-Redacted"] = status
+
+        except Exception as e:
+            logger.error("[secret-guardrail] error in post-call hook: %s", e)
+
+        return response
+
+
+_litellm_dir = os.path.dirname(os.path.abspath(__file__))
 
 guardrail_instance = SecretGuardrail(
     action=os.environ.get("SECRET_GUARDRAIL_ACTION", "redact"),
-    check_injection=os.environ.get("SECRET_GUARDRAIL_CHECK_INJECTION", "false").lower() == "true",
+    check_injection=os.environ.get("SECRET_GUARDRAIL_CHECK_INJECTION", "true").lower() != "false",
 )

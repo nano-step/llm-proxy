@@ -92,3 +92,45 @@ model_list:
       model: openai/gpt-5.3-codex
       api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
       api_key: gitlab-oidc
+
+  - model_name: openai/gemini-3.1-pro-high
+    litellm_params:
+      model: openai/gemini-3.1-pro-high
+      api_base: http://127.0.0.1:8317/v1
+      api_key: ht44lfMraDfYb82gVmpdDKcccBebeJdm2soBLAqH
+      num_retries: 3
+
+  - model_name: openai/gemini-3-pro-preview
+    litellm_params:
+      model: openai/gemini-3-pro-preview
+      api_base: http://127.0.0.1:8317/v1
+      api_key: ht44lfMraDfYb82gVmpdDKcccBebeJdm2soBLAqH
+      num_retries: 3
+
+  - model_name: openai/gemini-3-flash-preview
+    litellm_params:
+      model: openai/gemini-3-flash-preview
+      api_base: http://127.0.0.1:8317/v1
+      api_key: ht44lfMraDfYb82gVmpdDKcccBebeJdm2soBLAqH
+      num_retries: 3
+
+  - model_name: openai/gemini-2.5-flash
+    litellm_params:
+      model: openai/gemini-2.5-flash
+      api_base: http://127.0.0.1:8317/v1
+      api_key: ht44lfMraDfYb82gVmpdDKcccBebeJdm2soBLAqH
+      num_retries: 3
+
+  - model_name: openai/gemini-3.1-flash-image
+    litellm_params:
+      model: openai/gemini-3.1-flash-image
+      api_base: http://127.0.0.1:8317/v1
+      api_key: ht44lfMraDfYb82gVmpdDKcccBebeJdm2soBLAqH
+      num_retries: 3
+
+  - model_name: openai/vision-model
+    litellm_params:
+      model: openai/vision-model
+      api_base: http://127.0.0.1:8317/v1
+      api_key: ht44lfMraDfYb82gVmpdDKcccBebeJdm2soBLAqH
+      num_retries: 3

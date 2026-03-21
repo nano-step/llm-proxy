@@ -45,8 +45,8 @@ def fetch_token():
 
 
 def write_config(token_data):
-    hdrs = {k: v for k, v in token_data["headers"].items() if k != "x-api-key"}
-    hdrs["Authorization"] = f"Bearer {token_data['token']}"
+    # NOTE: Do NOT write Authorization/token values to disk.
+    # Token injection happens at runtime via gitlab_token_callback.
 
     gitlab_models = [{
         "model_name": name,
@@ -54,7 +54,6 @@ def write_config(token_data):
             "model": model,
             "api_base": AI_GATEWAY,
             "api_key": "gitlab-oidc",
-            "extra_headers": hdrs,
         },
     } for name, model in MODELS]
 
@@ -72,6 +71,7 @@ def write_config(token_data):
             "callbacks": [
                 "gitlab_token_callback.proxy_handler_instance",
                 "token_logger.token_logger_instance",
+                "secret_guardrail.guardrail_instance",
             ],
         },
     }
@@ -85,7 +85,7 @@ def refresh_loop():
         try:
             td = fetch_token()
             write_config(td)
-            print(f"[token] refreshed, expires {time.strftime('%H:%M:%S', time.localtime(td['expires_at']))}", flush=True)
+            print("[token] refreshed successfully", flush=True)
         except Exception as e:
             print(f"[token] refresh error: {e}", flush=True)
 
@@ -121,7 +121,7 @@ def main():
     print("[startup] fetching GitLab OIDC token...", flush=True)
     td = fetch_token()
     write_config(td)
-    print(f"[startup] token OK, expires {time.strftime('%H:%M:%S', time.localtime(td['expires_at']))}", flush=True)
+    print("[startup] token OK", flush=True)
 
     threading.Thread(target=refresh_loop, daemon=True).start()
 

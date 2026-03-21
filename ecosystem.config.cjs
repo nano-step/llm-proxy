@@ -14,7 +14,7 @@ module.exports = {
   apps: [
     {
       name: "litellm-proxy",
-      script: path.join(process.env.HOME, ".local/bin/litellm"),
+      script: path.join(process.env.HOME, ".venvs/litellm/bin/litellm"),
       args: `--config ${path.join(CWD, "litellm_config.yaml")} --port ${process.env.LITELLM_PORT || "4000"}`,
       cwd: CWD,
       interpreter: "none",

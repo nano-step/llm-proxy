@@ -2,135 +2,275 @@ general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
   database_url: os.environ/DATABASE_URL
   store_model_in_db: true
-
 litellm_settings:
   num_retries: 2
   request_timeout: 120
   allowed_fails: 3
   cooldown_time: 30
+  redis_host: 127.0.0.1
+  redis_port: 6379
+  redis_db: 0
+  redis_timeout: 10
+  redis_url: redis://127.0.0.1:6379/0
   callbacks:
-    - gitlab_token_callback.proxy_handler_instance
-    - token_logger.token_logger_instance
-    - secret_guardrail.guardrail_instance
-
+  - gitlab_token_callback.proxy_handler_instance
+  - token_logger.token_logger_instance
+  - secret_guardrail.guardrail_instance
 guardrails:
-  - guardrail_name: hide-secrets
-    litellm_params:
-      guardrail: hide-secrets
-      mode: pre_call
-
+- guardrail_name: hide-secrets
+  litellm_params:
+    guardrail: hide-secrets
+    mode: pre_call
 model_list:
-  - model_name: gitlab/claude-sonnet-4-6
-    litellm_params:
-      model: anthropic/claude-sonnet-4-6
-      api_base: https://cloud.gitlab.com/ai/v1/proxy/anthropic
-      api_key: gitlab-oidc
-      fallbacks: [{ "openai/qwen3-coder-plus": [] }]
-      num_retries: 2
-
-  - model_name: gitlab/claude-opus-4-6
-    litellm_params:
-      model: anthropic/claude-opus-4-6
-      api_base: https://cloud.gitlab.com/ai/v1/proxy/anthropic
-      api_key: gitlab-oidc
-      fallbacks: [{ "openai/qwen3-coder-plus": [] }]
-      num_retries: 2
-
-  - model_name: gitlab/claude-sonnet-4-5
-    litellm_params:
-      model: anthropic/claude-sonnet-4-5-20250929
-      api_base: https://cloud.gitlab.com/ai/v1/proxy/anthropic
-      api_key: gitlab-oidc
-      fallbacks: [{ "openai/qwen3-coder-plus": [] }]
-      num_retries: 2
-
-  - model_name: gitlab/claude-opus-4-5
-    litellm_params:
-      model: anthropic/claude-opus-4-5-20251101
-      api_base: https://cloud.gitlab.com/ai/v1/proxy/anthropic
-      api_key: gitlab-oidc
-
-  - model_name: gitlab/claude-haiku-4-5
-    litellm_params:
-      model: anthropic/claude-haiku-4-5-20251001
-      api_base: https://cloud.gitlab.com/ai/v1/proxy/anthropic
-      api_key: gitlab-oidc
-
-  # OpenAI GPT-5 models via GitLab Duo
-  - model_name: gitlab/gpt-5-1
-    litellm_params:
-      model: openai/gpt-5.1-2025-11-13
-      api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
-      api_key: gitlab-oidc
-
-  - model_name: gitlab/gpt-5-2
-    litellm_params:
-      model: openai/gpt-5.2-2025-12-11
-      api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
-      api_key: gitlab-oidc
-
-  - model_name: gitlab/gpt-5-mini
-    litellm_params:
-      model: openai/gpt-5-mini-2025-08-07
-      api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
-      api_key: gitlab-oidc
-
-  - model_name: gitlab/gpt-5-codex
-    litellm_params:
-      model: openai/gpt-5-codex
-      api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
-      api_key: gitlab-oidc
-
-  - model_name: gitlab/gpt-5-2-codex
-    litellm_params:
-      model: openai/gpt-5.2-codex
-      api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
-      api_key: gitlab-oidc
-
-  - model_name: gitlab/gpt-5-3-codex
-    litellm_params:
-      model: openai/gpt-5.3-codex
-      api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
-      api_key: gitlab-oidc
-
-  - model_name: openai/gemini-3.1-pro-high
-    litellm_params:
-      model: openai/gemini-3.1-pro-high
-      api_base: http://127.0.0.1:8317/v1
-      api_key: ht44lfMraDfYb82gVmpdDKcccBebeJdm2soBLAqH
-      num_retries: 3
-
-  - model_name: openai/gemini-3-pro-preview
-    litellm_params:
-      model: openai/gemini-3-pro-preview
-      api_base: http://127.0.0.1:8317/v1
-      api_key: ht44lfMraDfYb82gVmpdDKcccBebeJdm2soBLAqH
-      num_retries: 3
-
-  - model_name: openai/gemini-3-flash-preview
-    litellm_params:
-      model: openai/gemini-3-flash-preview
-      api_base: http://127.0.0.1:8317/v1
-      api_key: ht44lfMraDfYb82gVmpdDKcccBebeJdm2soBLAqH
-      num_retries: 3
-
-  - model_name: openai/gemini-2.5-flash
-    litellm_params:
-      model: openai/gemini-2.5-flash
-      api_base: http://127.0.0.1:8317/v1
-      api_key: ht44lfMraDfYb82gVmpdDKcccBebeJdm2soBLAqH
-      num_retries: 3
-
-  - model_name: openai/gemini-3.1-flash-image
-    litellm_params:
-      model: openai/gemini-3.1-flash-image
-      api_base: http://127.0.0.1:8317/v1
-      api_key: ht44lfMraDfYb82gVmpdDKcccBebeJdm2soBLAqH
-      num_retries: 3
-
-  - model_name: openai/vision-model
-    litellm_params:
-      model: openai/vision-model
-      api_base: http://127.0.0.1:8317/v1
-      api_key: ht44lfMraDfYb82gVmpdDKcccBebeJdm2soBLAqH
-      num_retries: 3
+- model_name: gitlab/claude-sonnet-4-6
+  litellm_params:
+    model: anthropic/claude-sonnet-4-6
+    api_base: https://cloud.gitlab.com/ai/v1/proxy/anthropic
+    api_key: gitlab-oidc
+    fallbacks: &id001
+    - openai/claude-opus-4-6-thinking: []
+    - openai/claude-sonnet-4-6: []
+    - openai/gemini-3.1-pro-high: []
+    - openai/gemini-3-flash-preview: []
+    - openai/qwen3-coder-plus: []
+    num_retries: 2
+- model_name: gitlab/claude-opus-4-6
+  litellm_params:
+    model: anthropic/claude-opus-4-6
+    api_base: https://cloud.gitlab.com/ai/v1/proxy/anthropic
+    api_key: gitlab-oidc
+    fallbacks: *id001
+    num_retries: 2
+- model_name: gitlab/claude-sonnet-4-5
+  litellm_params:
+    model: anthropic/claude-sonnet-4-5-20250929
+    api_base: https://cloud.gitlab.com/ai/v1/proxy/anthropic
+    api_key: gitlab-oidc
+    fallbacks: *id001
+    num_retries: 2
+- model_name: gitlab/claude-opus-4-5
+  litellm_params:
+    model: anthropic/claude-opus-4-5-20251101
+    api_base: https://cloud.gitlab.com/ai/v1/proxy/anthropic
+    api_key: gitlab-oidc
+    fallbacks: *id001
+    num_retries: 2
+- model_name: gitlab/claude-haiku-4-5
+  litellm_params:
+    model: anthropic/claude-haiku-4-5-20251001
+    api_base: https://cloud.gitlab.com/ai/v1/proxy/anthropic
+    api_key: gitlab-oidc
+    fallbacks: *id001
+    num_retries: 2
+- model_name: gitlab/gpt-5-1
+  litellm_params:
+    model: openai/gpt-5.1-2025-11-13
+    api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
+    api_key: gitlab-oidc
+    fallbacks: *id001
+    num_retries: 2
+- model_name: gitlab/gpt-5-2
+  litellm_params:
+    model: openai/gpt-5.2-2025-12-11
+    api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
+    api_key: gitlab-oidc
+    fallbacks: *id001
+    num_retries: 2
+- model_name: gitlab/gpt-5-mini
+  litellm_params:
+    model: openai/gpt-5-mini-2025-08-07
+    api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
+    api_key: gitlab-oidc
+    fallbacks: *id001
+    num_retries: 2
+- model_name: gitlab/gpt-5-codex
+  litellm_params:
+    model: openai/gpt-5-codex
+    api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
+    api_key: gitlab-oidc
+    fallbacks: *id001
+    num_retries: 2
+- model_name: gitlab/gpt-5-2-codex
+  litellm_params:
+    model: openai/gpt-5.2-codex
+    api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
+    api_key: gitlab-oidc
+    fallbacks: *id001
+    num_retries: 2
+- model_name: gitlab/gpt-5-3-codex
+  litellm_params:
+    model: openai/gpt-5.3-codex
+    api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
+    api_key: gitlab-oidc
+    fallbacks: *id001
+    num_retries: 2
+- model_name: copilot/gpt-4.1
+  litellm_params:
+    model: github_copilot/gpt-4.1
+    num_retries: 2
+- model_name: copilot/gpt-4o
+  litellm_params:
+    model: github_copilot/gpt-4o
+    num_retries: 2
+- model_name: copilot/gpt-4o-mini
+  litellm_params:
+    model: github_copilot/gpt-4o-mini
+    num_retries: 2
+- model_name: copilot/gpt-4
+  litellm_params:
+    model: github_copilot/gpt-4
+    num_retries: 2
+- model_name: copilot/gpt-4-0125-preview
+  litellm_params:
+    model: github_copilot/gpt-4-0125-preview
+    num_retries: 2
+- model_name: copilot/gpt-4-o-preview
+  litellm_params:
+    model: github_copilot/gpt-4-o-preview
+    num_retries: 2
+- model_name: copilot/gpt-5-mini
+  litellm_params:
+    model: github_copilot/gpt-5-mini
+    num_retries: 2
+- model_name: copilot/gpt-3.5-turbo
+  litellm_params:
+    model: github_copilot/gpt-3.5-turbo
+    num_retries: 2
+- model_name: copilot-premium/claude-sonnet-4.6
+  litellm_params:
+    model: github_copilot/claude-sonnet-4.6
+    num_retries: 2
+- model_name: copilot-premium/claude-opus-4.6
+  litellm_params:
+    model: github_copilot/claude-opus-4.6
+    num_retries: 2
+- model_name: copilot-premium/claude-sonnet-4.5
+  litellm_params:
+    model: github_copilot/claude-sonnet-4.5
+    num_retries: 2
+- model_name: copilot-premium/claude-opus-4.5
+  litellm_params:
+    model: github_copilot/claude-opus-4.5
+    num_retries: 2
+- model_name: copilot-premium/claude-haiku-4.5
+  litellm_params:
+    model: github_copilot/claude-haiku-4.5
+    num_retries: 2
+- model_name: copilot-premium/claude-sonnet-4
+  litellm_params:
+    model: github_copilot/claude-sonnet-4
+    num_retries: 2
+- model_name: copilot-premium/gpt-5.4
+  litellm_params:
+    model: github_copilot/gpt-5.4
+    num_retries: 2
+- model_name: copilot-premium/gpt-5.2
+  litellm_params:
+    model: github_copilot/gpt-5.2
+    num_retries: 2
+- model_name: copilot-premium/gpt-5.1
+  litellm_params:
+    model: github_copilot/gpt-5.1
+    num_retries: 2
+- model_name: copilot-premium/gemini-3.1-pro-preview
+  litellm_params:
+    model: github_copilot/gemini-3.1-pro-preview
+    num_retries: 2
+- model_name: copilot-premium/gemini-3-pro-preview
+  litellm_params:
+    model: github_copilot/gemini-3-pro-preview
+    num_retries: 2
+- model_name: copilot-premium/gemini-3-flash-preview
+  litellm_params:
+    model: github_copilot/gemini-3-flash-preview
+    num_retries: 2
+- model_name: copilot-premium/gemini-2.5-pro
+  litellm_params:
+    model: github_copilot/gemini-2.5-pro
+    num_retries: 2
+- model_name: copilot-premium/grok-code-fast-1
+  litellm_params:
+    model: github_copilot/grok-code-fast-1
+    num_retries: 2
+- model_name: copilot-responses/gpt-5.3-codex
+  litellm_params:
+    model: github_copilot/gpt-5.3-codex
+    num_retries: 2
+- model_name: copilot-responses/gpt-5.2-codex
+  litellm_params:
+    model: github_copilot/gpt-5.2-codex
+    num_retries: 2
+- model_name: copilot-responses/gpt-5.1-codex
+  litellm_params:
+    model: github_copilot/gpt-5.1-codex
+    num_retries: 2
+- model_name: copilot-responses/gpt-5.1-codex-mini
+  litellm_params:
+    model: github_copilot/gpt-5.1-codex-mini
+    num_retries: 2
+- model_name: copilot-responses/gpt-5.1-codex-max
+  litellm_params:
+    model: github_copilot/gpt-5.1-codex-max
+    num_retries: 2
+- model_name: copilot-embedding/text-embedding-3-small
+  litellm_params:
+    model: github_copilot/text-embedding-3-small
+    num_retries: 2
+- model_name: copilot-embedding/text-embedding-ada-002
+  litellm_params:
+    model: github_copilot/text-embedding-ada-002
+    num_retries: 2
+- model_name: openai/gemini-3.1-pro-high
+  litellm_params:
+    model: openai/gemini-3.1-pro-high
+    api_base: http://127.0.0.1:8317/v1
+    api_key: ht44lfMraDfYb82gVmpdDKcccBebeJdm2soBLAqH
+    num_retries: 3
+- model_name: openai/gemini-3-pro-preview
+  litellm_params:
+    model: openai/gemini-3-pro-preview
+    api_base: http://127.0.0.1:8317/v1
+    api_key: ht44lfMraDfYb82gVmpdDKcccBebeJdm2soBLAqH
+    num_retries: 3
+- model_name: openai/gemini-3-flash-preview
+  litellm_params:
+    model: openai/gemini-3-flash-preview
+    api_base: http://127.0.0.1:8317/v1
+    api_key: ht44lfMraDfYb82gVmpdDKcccBebeJdm2soBLAqH
+    num_retries: 3
+- model_name: openai/gemini-2.5-flash
+  litellm_params:
+    model: openai/gemini-2.5-flash
+    api_base: http://127.0.0.1:8317/v1
+    api_key: ht44lfMraDfYb82gVmpdDKcccBebeJdm2soBLAqH
+    num_retries: 3
+- model_name: openai/gemini-3.1-flash-image
+  litellm_params:
+    model: openai/gemini-3.1-flash-image
+    api_base: http://127.0.0.1:8317/v1
+    api_key: ht44lfMraDfYb82gVmpdDKcccBebeJdm2soBLAqH
+    num_retries: 3
+- model_name: openai/vision-model
+  litellm_params:
+    model: openai/vision-model
+    api_base: http://127.0.0.1:8317/v1
+    api_key: ht44lfMraDfYb82gVmpdDKcccBebeJdm2soBLAqH
+    num_retries: 3
+- model_name: openai/claude-opus-4-6-thinking
+  litellm_params:
+    model: openai/claude-opus-4-6-thinking
+    api_base: http://127.0.0.1:8317/v1
+    api_key: ht44lfMraDfYb82gVmpdDKcccBebeJdm2soBLAqH
+    num_retries: 2
+- model_name: openai/claude-sonnet-4-6
+  litellm_params:
+    model: openai/claude-sonnet-4-6
+    api_base: http://127.0.0.1:8317/v1
+    api_key: ht44lfMraDfYb82gVmpdDKcccBebeJdm2soBLAqH
+    num_retries: 2
+- model_name: openai/qwen3-coder-plus
+  litellm_params:
+    model: openai/qwen3-coder-plus
+    api_base: http://127.0.0.1:8317/v1
+    api_key: ht44lfMraDfYb82gVmpdDKcccBebeJdm2soBLAqH
+    num_retries: 2

@@ -14,7 +14,8 @@ import math
 import urllib.parse
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
-from litellm.integrations.custom_logger import CustomLogger
+from litellm.integrations.custom_guardrail import CustomGuardrail
+from litellm.types.guardrails import GuardrailEventHooks
 
 logger = __import__("logging").getLogger("litellm.secret_guardrail")
 
@@ -1021,10 +1022,10 @@ class RedactionEngine:
 # GUARDRAIL CLASS
 # ─────────────────────────────────────────────────────────────────────────────
 
-class SecretGuardrail(CustomLogger):
+class SecretGuardrail(CustomGuardrail):
 
     def __init__(self, action: str = "redact", check_injection: bool = True):
-        super().__init__()
+        super().__init__(guardrail_name="hide-secrets")
         self.action = action
         self.check_injection = check_injection
 
@@ -1062,6 +1063,8 @@ class SecretGuardrail(CustomLogger):
         data,
         call_type,
     ):
+        start_time = time.time()
+
         if not (isinstance(call_type, str) and call_type in (
             "chat_completion", "acompletion", "completion"
         )):
@@ -1154,15 +1157,51 @@ class SecretGuardrail(CustomLogger):
             action = "BLOCKED" if had_block else self.action.upper()
             logger.warning("[secret-guardrail] %s — %s", action, "; ".join(summary_parts))
 
+        # ── Report to LiteLLM standard guardrail logging ─────────────────────
+        end_time = time.time()
+        all_event_types = sorted(set(
+            vault_secrets + header_secrets + prompt_secrets + injection_warnings
+        ))
+        total_events = len(vault_secrets) + len(header_secrets) + len(prompt_secrets) + len(injection_warnings)
+
+        if had_block:
+            guardrail_action = "blocked"
+        elif had_redaction:
+            guardrail_action = "redacted"
+        else:
+            guardrail_action = "clean"
+
+        guardrail_summary = {
+            "action": guardrail_action,
+            "events_count": total_events,
+            "event_types": all_event_types,
+        }
+        guardrail_status = "guardrail_intervened" if (had_redaction or had_block) else "success"
+
+        try:
+            self.add_standard_logging_guardrail_information_to_request_data(
+                guardrail_json_response=guardrail_summary,
+                request_data=data,
+                guardrail_status=guardrail_status,
+                start_time=start_time,
+                end_time=end_time,
+                guardrail_provider="secret_guardrail",
+                event_type=GuardrailEventHooks.pre_call,
+            )
+        except Exception as e:
+            logger.debug("[secret-guardrail] failed to report to standard logging: %s", e)
+
         return data
 
     async def async_post_call_success_hook(self, data, user_api_key_dict, response):
+        start_time = time.time()
+        post_redacted_any = False
+        post_blocked = False
+        post_event_types: list = []
+
         try:
             if not hasattr(response, "choices"):
                 return response
-
-            redacted_any = False
-            blocked = False
 
             for choice in response.choices:
                 if not hasattr(choice, "message") or not hasattr(choice.message, "content"):
@@ -1174,7 +1213,10 @@ class SecretGuardrail(CustomLogger):
                 result = self._engine.scan_and_redact(content)
 
                 if result.blocked:
-                    blocked = True
+                    post_blocked = True
+                    for e in result.events:
+                        if e.secret_id:
+                            post_event_types.append(e.secret_id)
                     choice.message.content = (
                         "[Response blocked: detected sensitive data in output. "
                         "The requested information cannot be provided.]"
@@ -1184,23 +1226,54 @@ class SecretGuardrail(CustomLogger):
                         [e.secret_id for e in result.events],
                     )
                 elif result.events:
-                    redacted_any = True
+                    post_redacted_any = True
+                    for e in result.events:
+                        if e.secret_id:
+                            post_event_types.append(e.secret_id)
                     choice.message.content = result.redacted_text
                     logger.warning(
                         "[secret-guardrail] REDACTED secrets in response: %s",
                         [e.secret_id for e in result.events],
                     )
 
-            if blocked or redacted_any:
+            if post_blocked or post_redacted_any:
                 if not hasattr(response, "_hidden_params"):
                     response._hidden_params = {}
                 if "additional_headers" not in response._hidden_params:
                     response._hidden_params["additional_headers"] = {}
-                status = "blocked" if blocked else "redacted"
+                status = "blocked" if post_blocked else "redacted"
                 response._hidden_params["additional_headers"]["X-LiteLLM-Secrets-Redacted"] = status
 
         except Exception as e:
             logger.error("[secret-guardrail] error in post-call hook: %s", e)
+
+        end_time = time.time()
+        if post_blocked:
+            post_action = "blocked"
+        elif post_redacted_any:
+            post_action = "redacted"
+        else:
+            post_action = "clean"
+
+        post_summary = {
+            "action": post_action,
+            "events_count": len(post_event_types),
+            "event_types": sorted(set(post_event_types)),
+        }
+        post_status = "guardrail_intervened" if (post_redacted_any or post_blocked) else "success"
+
+        try:
+            self.add_standard_logging_guardrail_information_to_request_data(
+                guardrail_json_response=post_summary,
+                request_data=data if isinstance(data, dict) else {},
+                guardrail_status=post_status,
+                start_time=start_time,
+                end_time=end_time,
+                guardrail_provider="secret_guardrail",
+                event_type=GuardrailEventHooks.post_call,
+            )
+        except Exception as e:
+            logger.debug("[secret-guardrail] failed to report post-call to standard logging: %s", e)
 
         return response
 

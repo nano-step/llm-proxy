@@ -7,11 +7,6 @@ litellm_settings:
   request_timeout: 120
   allowed_fails: 3
   cooldown_time: 30
-  redis_host: 127.0.0.1
-  redis_port: 6379
-  redis_db: 0
-  redis_timeout: 10
-  redis_url: redis://127.0.0.1:6379/0
   callbacks:
   - gitlab_token_callback.proxy_handler_instance
   - secret_guardrail.guardrail_instance

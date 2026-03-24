@@ -100,6 +100,27 @@ class GitLabOIDCCallback(CustomLogger):
 
     def __init__(self):
         self.token_manager = GitLabTokenManager()
+        self._gitlab_aliases: set[str] = set()
+
+    def _is_gitlab_model(self, model: str) -> bool:
+        """Check if model is a gitlab model or an alias that resolves to one."""
+        if model.startswith("gitlab/"):
+            return True
+
+        if not self._gitlab_aliases:
+            try:
+                from litellm.proxy.proxy_server import llm_router
+                if llm_router and hasattr(llm_router, "model_group_alias"):
+                    for alias, target in llm_router.model_group_alias.items():
+                        target_str = target if isinstance(target, str) else getattr(target, "model", "")
+                        if target_str.startswith("gitlab/"):
+                            self._gitlab_aliases.add(alias)
+                    logger.info("[gitlab-token] loaded %d aliases: %s",
+                                len(self._gitlab_aliases), self._gitlab_aliases)
+            except Exception as e:
+                logger.debug("[gitlab-token] could not load aliases: %s", e)
+
+        return model in self._gitlab_aliases
 
     async def async_pre_call_hook(
         self,
@@ -109,7 +130,7 @@ class GitLabOIDCCallback(CustomLogger):
         call_type,
     ):
         model = data.get("model", "") or ""
-        if not model.startswith("gitlab/"):
+        if not self._is_gitlab_model(model):
             return data
 
         headers = await self.token_manager.get_headers()

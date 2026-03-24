@@ -125,8 +125,8 @@ MESSAGING_PATTERNS = [
     (re.compile(r"(?i)SLACK_USER_TOKEN\s*[=:]\s*['\"]?xoxp-[0-9]{10,13}-[0-9]{10,13}-[a-zA-Z0-9]{24,}['\"]?"), "Slack user token env"),
     (re.compile(r"https://hooks\.slack\.com/services/T[a-zA-Z0-9]+/B[a-zA-Z0-9]+/[a-zA-Z0-9]+"), "Slack webhook URL"),
     # Discord
-    (re.compile(r"[MN][A-Za-z\d]{23,}\.[\w-]{6}\.[\w-]{27}"), "Discord bot/user token"),
-    (re.compile(r"(?i)DISCORD_BOT_TOKEN\s*[=:]\s*['\"]?[MN][A-Za-z\d]{23,}\.[\w-]{6}\.[\w-]{27}['\"]?"), "Discord bot token env"),
+    (re.compile(r"[A-Za-z0-9]{24,}\.[\w-]{6}\.[\w-]{11,}"), "Discord bot/user token"),
+    (re.compile(r"(?i)DISCORD_BOT_TOKEN\s*[=:]\s*['\"]?[A-Za-z0-9]{24,}\.[\w-]{6}\.[\w-]{11,}['\"]?"), "Discord bot token env"),
     (re.compile(r"https://discord\.com/api/webhooks/[0-9]+/[A-Za-z0-9_-]{60,}"), "Discord webhook"),
     # Telegram
     (re.compile(r"[0-9]{8,10}:[A-Za-z0-9_-]{35}"), "Telegram bot token"),
@@ -970,7 +970,8 @@ class RedactionEngine:
             forms = self._vault._secrets.get(vm.secret_id, {})
             for form_val in (forms.get('raw', ''), forms.get('normalized', '')):
                 if form_val and form_val in redacted:
-                    redacted = redacted.replace(form_val, '[REDACTED_SECRET]')
+                    masked = self._partial_mask(form_val)
+                    redacted = redacted.replace(form_val, masked)
 
         for view_name in ('unicode_normalized', 'whitespace_collapsed'):
             view_text = views.get(view_name, '')
@@ -981,8 +982,10 @@ class RedactionEngine:
                     events.append(RedactionEvent(detector=f'regex_{view_name}', secret_id=label, confidence=0.6))
 
         for pattern, label in REDACT_PATTERNS:
-            if pattern.search(redacted):
-                redacted = pattern.sub('[REDACTED_SECRET]', redacted)
+            for match in pattern.finditer(redacted):
+                secret = match.group()
+                masked = self._partial_mask(secret)
+                redacted = redacted.replace(secret, masked, 1)
                 events.append(RedactionEvent(detector='regex_raw', secret_id=label, confidence=0.8))
 
         redacted = self._entropy_redact(redacted, events)
@@ -996,7 +999,8 @@ class RedactionEngine:
             entropy = self._shannon_entropy(s)
             if entropy >= 4.5:
                 events.append(RedactionEvent(detector='entropy_b64', secret_id=None, confidence=0.5))
-                text = text.replace(s, '[REDACTED_SECRET]', 1)
+                masked = self._partial_mask(s)
+                text = text.replace(s, masked, 1)
 
         hex_re = re.compile(r'[a-fA-F0-9]{40,}')
         for m in hex_re.finditer(text):
@@ -1004,7 +1008,8 @@ class RedactionEngine:
             entropy = self._shannon_entropy(s)
             if entropy >= 3.0:
                 events.append(RedactionEvent(detector='entropy_hex', secret_id=None, confidence=0.5))
-                text = text.replace(s, '[REDACTED_SECRET]', 1)
+                masked = self._partial_mask(s)
+                text = text.replace(s, masked, 1)
 
         return text
 
@@ -1016,6 +1021,24 @@ class RedactionEngine:
         counts = Counter(s)
         length = len(s)
         return -sum((c / length) * math.log2(c / length) for c in counts.values())
+
+    @staticmethod
+    def _partial_mask(secret: str) -> str:
+        """
+        Partially mask a secret, showing first 5 and last 3 characters.
+        Example: sk-proj-abc123def456ghi789 -> sk-pr****789
+        """
+        if len(secret) <= 8:
+            # Too short to partially mask safely
+            return '****'
+        
+        prefix_len = min(5, len(secret) // 3)
+        suffix_len = min(3, len(secret) // 4)
+        
+        prefix = secret[:prefix_len]
+        suffix = secret[-suffix_len:]
+        
+        return f"{prefix}****{suffix}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────

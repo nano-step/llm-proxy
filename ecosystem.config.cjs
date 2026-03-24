@@ -27,6 +27,7 @@ module.exports = {
         UI_USERNAME: process.env.UI_USERNAME || "admin",
         UI_PASSWORD: process.env.UI_PASSWORD,
         PYTHONPATH: CWD,
+        DISABLE_SCHEMA_UPDATE: "true",
       },
       autorestart: true,
       max_restarts: 50,

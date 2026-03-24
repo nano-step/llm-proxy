@@ -17,6 +17,13 @@ guardrails:
   litellm_params:
     guardrail: hide-secrets
     mode: pre_call
+router_settings:
+  model_group_alias:
+    "claude-sonnet-4-6": "gitlab/claude-sonnet-4-6"
+    "claude-opus-4-6": "gitlab/claude-opus-4-6"
+    "claude-sonnet-4-5": "gitlab/claude-sonnet-4-5"
+    "claude-opus-4-5": "gitlab/claude-opus-4-5"
+    "claude-haiku-4-5": "gitlab/claude-haiku-4-5"
 model_list:
 - model_name: gitlab/claude-sonnet-4-6
   litellm_params:

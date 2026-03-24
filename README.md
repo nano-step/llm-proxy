@@ -136,6 +136,20 @@ Edit `litellm_config.yaml` to add/remove models.
 - `model`: `github_copilot/<model-id>` (LiteLLM handles auth automatically)
 - No `api_base` or `api_key` needed — resolved via OAuth device flow
 
+**Model aliases** (optional):
+
+If you want to map short model names (e.g., `claude-sonnet-4-6`) to full proxy model names (e.g., `gitlab/claude-sonnet-4-6`), add a `router_settings` section:
+
+```yaml
+router_settings:
+  model_group_alias:
+    "claude-sonnet-4-6": "gitlab/claude-sonnet-4-6"
+    "claude-opus-4-6": "gitlab/claude-opus-4-6"
+    "claude-haiku-4-5": "gitlab/claude-haiku-4-5"
+```
+
+This is useful for clients like Claude Code that send model names without the provider prefix.
+
 ### 3. Start
 
 ```bash

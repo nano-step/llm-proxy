@@ -12,6 +12,7 @@ litellm_settings:
   callbacks:
   - gitlab_token_callback.proxy_handler_instance
   - secret_guardrail.guardrail_instance
+  - fallback_fixer.fallback_fixer_instance
 guardrails:
 - guardrail_name: hide-secrets
   litellm_params:

@@ -23,94 +23,98 @@ router_settings:
     "claude-sonnet-4-6": "gitlab/claude-sonnet-4-6"
     "claude-opus-4-6": "gitlab/claude-opus-4-6"
     "claude-sonnet-4-5": "gitlab/claude-sonnet-4-5"
+    "claude-sonnet-4-5-20250929": "gitlab/claude-sonnet-4-5"
     "claude-opus-4-5": "gitlab/claude-opus-4-5"
+    "claude-opus-4-5-20251101": "gitlab/claude-opus-4-5"
     "claude-haiku-4-5": "gitlab/claude-haiku-4-5"
+    "claude-haiku-4-5-20251001": "gitlab/claude-haiku-4-5"
+  fallbacks:
+  - "gitlab/claude-sonnet-4-6": &gitlab_fallbacks
+    - "gitlab/gpt-5-2"
+    - "gitlab/gpt-5-3-codex"
+    - "gitlab/gpt-5-2-codex"
+    - "gitlab/gpt-5-1"
+    - "openai/gemini-3.1-pro-high"
+    - "openai/gemini-3-flash-preview"
+    - "openai/gemini-3-pro-preview"
+    - "openai/gemini-2.5-flash"
+    - "openai/qwen3-coder-plus"
+  - "gitlab/claude-opus-4-6": *gitlab_fallbacks
+  - "gitlab/claude-sonnet-4-5": *gitlab_fallbacks
+  - "gitlab/claude-opus-4-5": *gitlab_fallbacks
+  - "gitlab/claude-haiku-4-5": *gitlab_fallbacks
+  - "gitlab/gpt-5-1": *gitlab_fallbacks
+  - "gitlab/gpt-5-2": *gitlab_fallbacks
+  - "gitlab/gpt-5-mini": *gitlab_fallbacks
+  - "gitlab/gpt-5-codex": *gitlab_fallbacks
+  - "gitlab/gpt-5-2-codex": *gitlab_fallbacks
+  - "gitlab/gpt-5-3-codex": *gitlab_fallbacks
 model_list:
 - model_name: gitlab/claude-sonnet-4-6
   litellm_params:
     model: anthropic/claude-sonnet-4-6
     api_base: https://cloud.gitlab.com/ai/v1/proxy/anthropic
     api_key: gitlab-oidc
-    fallbacks: &id001
-    - gitlab/gpt-5-2: []
-    - gitlab/gpt-5-3-codex: []
-    - gitlab/gpt-5-2-codex: []
-    - gitlab/gpt-5-1: []
-    - openai/gemini-3.1-pro-high: []
-    - openai/gemini-3-flash-preview: []
-    - openai/gemini-3-pro-preview: []
-    - openai/gemini-2.5-flash: []
-    - openai/qwen3-coder-plus: []
     num_retries: 2
 - model_name: gitlab/claude-opus-4-6
   litellm_params:
     model: anthropic/claude-opus-4-6
     api_base: https://cloud.gitlab.com/ai/v1/proxy/anthropic
     api_key: gitlab-oidc
-    fallbacks: *id001
     num_retries: 2
 - model_name: gitlab/claude-sonnet-4-5
   litellm_params:
     model: anthropic/claude-sonnet-4-5-20250929
     api_base: https://cloud.gitlab.com/ai/v1/proxy/anthropic
     api_key: gitlab-oidc
-    fallbacks: *id001
     num_retries: 2
 - model_name: gitlab/claude-opus-4-5
   litellm_params:
     model: anthropic/claude-opus-4-5-20251101
     api_base: https://cloud.gitlab.com/ai/v1/proxy/anthropic
     api_key: gitlab-oidc
-    fallbacks: *id001
     num_retries: 2
 - model_name: gitlab/claude-haiku-4-5
   litellm_params:
     model: anthropic/claude-haiku-4-5-20251001
     api_base: https://cloud.gitlab.com/ai/v1/proxy/anthropic
     api_key: gitlab-oidc
-    fallbacks: *id001
     num_retries: 2
 - model_name: gitlab/gpt-5-1
   litellm_params:
     model: openai/gpt-5.1-2025-11-13
     api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
     api_key: gitlab-oidc
-    fallbacks: *id001
     num_retries: 2
 - model_name: gitlab/gpt-5-2
   litellm_params:
     model: openai/gpt-5.2-2025-12-11
     api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
     api_key: gitlab-oidc
-    fallbacks: *id001
     num_retries: 2
 - model_name: gitlab/gpt-5-mini
   litellm_params:
     model: openai/gpt-5-mini-2025-08-07
     api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
     api_key: gitlab-oidc
-    fallbacks: *id001
     num_retries: 2
 - model_name: gitlab/gpt-5-codex
   litellm_params:
     model: openai/gpt-5-codex
     api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
     api_key: gitlab-oidc
-    fallbacks: *id001
     num_retries: 2
 - model_name: gitlab/gpt-5-2-codex
   litellm_params:
     model: openai/gpt-5.2-codex
     api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
     api_key: gitlab-oidc
-    fallbacks: *id001
     num_retries: 2
 - model_name: gitlab/gpt-5-3-codex
   litellm_params:
     model: openai/gpt-5.3-codex
     api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
     api_key: gitlab-oidc
-    fallbacks: *id001
     num_retries: 2
 - model_name: copilot/gpt-4.1
   litellm_params:
@@ -232,53 +236,53 @@ model_list:
   litellm_params:
     model: openai/gemini-3.1-pro-high
     api_base: http://127.0.0.1:8317/v1
-    api_key: sk-openclaw-yaivsRjB2TFplhDFi
+    api_key: sk-op****DFi
     num_retries: 3
 - model_name: openai/gemini-3-pro-preview
   litellm_params:
     model: openai/gemini-3-pro-preview
     api_base: http://127.0.0.1:8317/v1
-    api_key: sk-openclaw-yaivsRjB2TFplhDFi
+    api_key: sk-op****DFi
     num_retries: 3
 - model_name: openai/gemini-3-flash-preview
   litellm_params:
     model: openai/gemini-3-flash-preview
     api_base: http://127.0.0.1:8317/v1
-    api_key: sk-openclaw-yaivsRjB2TFplhDFi
+    api_key: sk-op****DFi
     num_retries: 3
 - model_name: openai/gemini-2.5-flash
   litellm_params:
     model: openai/gemini-2.5-flash
     api_base: http://127.0.0.1:8317/v1
-    api_key: sk-openclaw-yaivsRjB2TFplhDFi
+    api_key: sk-op****DFi
     num_retries: 3
 - model_name: openai/gemini-3.1-flash-image
   litellm_params:
     model: openai/gemini-3.1-flash-image
     api_base: http://127.0.0.1:8317/v1
-    api_key: sk-openclaw-yaivsRjB2TFplhDFi
+    api_key: sk-op****DFi
     num_retries: 3
 - model_name: openai/vision-model
   litellm_params:
     model: openai/vision-model
     api_base: http://127.0.0.1:8317/v1
-    api_key: sk-openclaw-yaivsRjB2TFplhDFi
+    api_key: sk-op****DFi
     num_retries: 3
 - model_name: openai/claude-opus-4-6-thinking
   litellm_params:
     model: openai/claude-opus-4-6-thinking
     api_base: http://127.0.0.1:8317/v1
-    api_key: sk-openclaw-yaivsRjB2TFplhDFi
+    api_key: sk-op****DFi
     num_retries: 2
 - model_name: openai/claude-sonnet-4-6
   litellm_params:
     model: openai/claude-sonnet-4-6
     api_base: http://127.0.0.1:8317/v1
-    api_key: sk-openclaw-yaivsRjB2TFplhDFi
+    api_key: sk-op****DFi
     num_retries: 2
 - model_name: openai/qwen3-coder-plus
   litellm_params:
     model: openai/qwen3-coder-plus
     api_base: http://127.0.0.1:8317/v1
-    api_key: sk-openclaw-yaivsRjB2TFplhDFi
+    api_key: sk-op****DFi
     num_retries: 2

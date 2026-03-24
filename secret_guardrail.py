@@ -1123,16 +1123,53 @@ class SecretGuardrail(CustomGuardrail):
                 return label
         return None
 
-    def _extract_text_blocks(self, raw_content) -> list[str]:
+    def _apply_redaction(self, content_list: list, original: str, redacted: str):
+        for block in content_list:
+            if not isinstance(block, dict):
+                continue
+            block_type = block.get("type", "")
+            if block_type == "text" and block.get("text") == original:
+                block["text"] = redacted
+                return
+            elif block_type == "tool_result":
+                inner = block.get("content", "")
+                if isinstance(inner, str) and inner == original:
+                    block["content"] = redacted
+                    return
+                elif isinstance(inner, list):
+                    self._apply_redaction(inner, original, redacted)
+            elif block_type == "tool_use":
+                inp = block.get("input")
+                if isinstance(inp, dict):
+                    for k, v in inp.items():
+                        if isinstance(v, str) and v == original:
+                            inp[k] = redacted
+                            return
+
+    def _extract_text_blocks(self, raw_content, _source: str = "text") -> list[tuple]:
         if isinstance(raw_content, str):
-            return [raw_content]
+            return [(raw_content, _source)]
         if isinstance(raw_content, list):
             blocks = []
             for block in raw_content:
-                if isinstance(block, dict) and block.get("type") == "text":
+                if not isinstance(block, dict):
+                    continue
+                block_type = block.get("type", "")
+                if block_type == "text":
                     text = block.get("text", "")
                     if isinstance(text, str):
-                        blocks.append(text)
+                        blocks.append((text, _source))
+                elif block_type == "tool_result":
+                    inner = block.get("content", "")
+                    blocks.extend(self._extract_text_blocks(inner, _source="tool_result"))
+                elif block_type == "tool_use":
+                    inp = block.get("input")
+                    if isinstance(inp, dict):
+                        for v in inp.values():
+                            if isinstance(v, str):
+                                blocks.append((v, "tool_use"))
+                    elif isinstance(inp, str):
+                        blocks.append((inp, "tool_use"))
             return blocks
         return []
 
@@ -1146,7 +1183,8 @@ class SecretGuardrail(CustomGuardrail):
         start_time = time.time()
 
         if not (isinstance(call_type, str) and call_type in (
-            "chat_completion", "acompletion", "completion"
+            "chat_completion", "acompletion", "completion",
+            "anthropic_messages",
         )):
             return data
 
@@ -1166,7 +1204,7 @@ class SecretGuardrail(CustomGuardrail):
                 continue
             raw_content = msg.get("content", "")
             if raw_content:
-                all_text_parts.extend(self._extract_text_blocks(raw_content))
+                all_text_parts.extend(t for t, _ in self._extract_text_blocks(raw_content))
 
         if all_text_parts:
             concatenated = "\n".join(all_text_parts)
@@ -1195,8 +1233,8 @@ class SecretGuardrail(CustomGuardrail):
             msg_role = msg.get("role", "")
             text_blocks = self._extract_text_blocks(raw_content)
 
-            for text_content in text_blocks:
-                if self.check_injection and msg_role == "user":
+            for text_content, block_source in text_blocks:
+                if self.check_injection and msg_role == "user" and block_source == "text":
                     injection = self._check_injection(text_content)
                     if injection:
                         injection_warnings.append(injection)
@@ -1217,11 +1255,7 @@ class SecretGuardrail(CustomGuardrail):
                     if isinstance(raw_content, str):
                         msg["content"] = result.redacted_text
                     elif isinstance(raw_content, list):
-                        for block in raw_content:
-                            if isinstance(block, dict) and block.get("type") == "text":
-                                if block.get("text") == text_content:
-                                    block["text"] = result.redacted_text
-                                    break
+                        self._apply_redaction(raw_content, text_content, result.redacted_text)
 
         should_log = had_block or bool(injection_warnings)
         if not should_log and (vault_secrets or header_secrets or prompt_secrets):

@@ -30,6 +30,7 @@ module.exports = {
         DISABLE_SCHEMA_UPDATE: "true",
       },
       autorestart: true,
+      max_memory_restart: "800M",
       max_restarts: 50,
       min_uptime: "5s",
       restart_delay: 3000,

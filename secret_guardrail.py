@@ -5,9 +5,11 @@ Decision policy:
   - ACCIDENTAL SECRETS (API keys, tokens, passwords, connection strings): REDACT → allow request
   - PROMPT INJECTION (attempts to extract/exfiltrate secrets): BLOCK → reject request
 """
+import gc
 import os
 import re
 import time
+import json as _json
 import unicodedata
 import base64
 import math
@@ -18,6 +20,52 @@ from litellm.integrations.custom_guardrail import CustomGuardrail
 from litellm.types.guardrails import GuardrailEventHooks
 
 logger = __import__("logging").getLogger("litellm.secret_guardrail")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# REDIS LOG RATE-LIMITER — suppress repeated REDACT warnings
+# ─────────────────────────────────────────────────────────────────────────────
+
+class _RedisRateLimiter:
+    _TTL = 300
+
+    def __init__(self, redis_url: str = "redis://127.0.0.1:6379/0"):
+        self._redis = None
+        self._redis_url = redis_url
+        self._available = True
+
+    def _ensure_client(self):
+        if self._redis is not None:
+            return
+        try:
+            import redis as _redis_mod
+            self._redis = _redis_mod.Redis.from_url(
+                self._redis_url,
+                decode_responses=True,
+                socket_connect_timeout=1,
+                socket_timeout=1,
+                retry_on_timeout=False,
+            )
+            self._redis.ping()
+        except Exception:
+            self._redis = None
+            self._available = False
+
+    def should_log(self, key: str) -> bool:
+        if not self._available:
+            return True
+        self._ensure_client()
+        if self._redis is None:
+            return True
+        try:
+            return bool(self._redis.set(key, "1", ex=self._TTL, nx=True))
+        except Exception:
+            return True
+
+
+_rate_limiter = _RedisRateLimiter(
+    redis_url=os.environ.get("SCAN_CACHE_REDIS_URL", "redis://127.0.0.1:6379/0")
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPERS
@@ -709,13 +757,16 @@ class NormalizationPipeline:
     def generate_views(self, text: str) -> Dict[str, str]:
         stripped = ''.join(c for c in text if unicodedata.category(c) != 'Cf')
         nfkc = unicodedata.normalize('NFKC', stripped)
+        del stripped
         unicode_norm = nfkc.casefold()
         ws_collapsed = re.sub(r'\s+', '', unicode_norm)
         alnum = re.sub(r'[^a-z0-9]', '', ws_collapsed)
         decode_parts = [urllib.parse.unquote(nfkc)]
         decode_parts.extend(self._decode_b64_segments(nfkc))
         decode_parts.extend(self._decode_hex_segments(nfkc))
+        del nfkc
         decoded = '\n'.join(p.casefold() for p in decode_parts)
+        del decode_parts
 
         return {
             'unicode_normalized': unicode_norm,
@@ -949,6 +1000,9 @@ class RedactionResult:
 
 
 class RedactionEngine:
+    _ENTROPY_B64_RE = re.compile(r'[A-Za-z0-9+/=_-]{32,}')
+    _ENTROPY_HEX_RE = re.compile(r'[a-fA-F0-9]{40,}')
+
     def __init__(self, vault: SecretVault):
         self._normalizer = NormalizationPipeline()
         self._vault = vault
@@ -981,6 +1035,8 @@ class RedactionEngine:
                 if pattern.search(view_text) and not pattern.search(redacted):
                     events.append(RedactionEvent(detector=f'regex_{view_name}', secret_id=label, confidence=0.6))
 
+        del views
+
         for pattern, label in REDACT_PATTERNS:
             for match in pattern.finditer(redacted):
                 secret = match.group()
@@ -993,8 +1049,7 @@ class RedactionEngine:
         return RedactionResult(redacted_text=redacted, blocked=blocked, events=events)
 
     def _entropy_redact(self, text: str, events: List[RedactionEvent]) -> str:
-        b64_re = re.compile(r'[A-Za-z0-9+/=_-]{32,}')
-        for m in b64_re.finditer(text):
+        for m in self._ENTROPY_B64_RE.finditer(text):
             s = m.group()
             entropy = self._shannon_entropy(s)
             if entropy >= 4.5:
@@ -1002,8 +1057,7 @@ class RedactionEngine:
                 masked = self._partial_mask(s)
                 text = text.replace(s, masked, 1)
 
-        hex_re = re.compile(r'[a-fA-F0-9]{40,}')
-        for m in hex_re.finditer(text):
+        for m in self._ENTROPY_HEX_RE.finditer(text):
             s = m.group()
             entropy = self._shannon_entropy(s)
             if entropy >= 3.0:
@@ -1046,6 +1100,9 @@ class RedactionEngine:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class SecretGuardrail(CustomGuardrail):
+
+    _gc_counter = 0
+    _GC_EVERY_N = 50
 
     def __init__(self, action: str = "redact", check_injection: bool = True):
         super().__init__(guardrail_name="hide-secrets")
@@ -1118,6 +1175,7 @@ class SecretGuardrail(CustomGuardrail):
             vault_matches = self._engine._vault.match_views(concat_views)
             if vault_matches:
                 vault_secrets = [m.secret_id for m in vault_matches]
+            del concatenated, concat_views, normalizer
 
         extra_headers = data.get("extra_headers", {})
         if extra_headers:
@@ -1165,8 +1223,11 @@ class SecretGuardrail(CustomGuardrail):
                                     block["text"] = result.redacted_text
                                     break
 
-        # ── Log ONE summary line ─────────────────────────────────────────────
-        if vault_secrets or header_secrets or prompt_secrets or injection_warnings:
+        should_log = had_block or bool(injection_warnings)
+        if not should_log and (vault_secrets or header_secrets or prompt_secrets):
+            should_log = _rate_limiter.should_log("sl:redact_rate")
+
+        if should_log and (vault_secrets or header_secrets or prompt_secrets or injection_warnings):
             summary_parts = []
             if vault_secrets:
                 summary_parts.append(f"vault=[{'|'.join(sorted(set(vault_secrets)))}]")
@@ -1213,6 +1274,11 @@ class SecretGuardrail(CustomGuardrail):
             )
         except Exception as e:
             logger.debug("[secret-guardrail] failed to report to standard logging: %s", e)
+
+        SecretGuardrail._gc_counter += 1
+        if SecretGuardrail._gc_counter >= self._GC_EVERY_N:
+            SecretGuardrail._gc_counter = 0
+            gc.collect()
 
         return data
 

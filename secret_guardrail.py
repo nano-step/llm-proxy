@@ -404,8 +404,8 @@ DEVOPS_PATTERNS = [
     (re.compile(r"(?i)BITBUCKET_TOKEN\s*[=:]\s*['\"]?ATBB[A-Za-z0-9_-]{42}['\"]?"), "Bitbucket token env"),
     (re.compile(r"(?i)BITBUCKET_APP_PASSWORD\s*[=:]\s*['\"]?ATBB[A-Za-z0-9_-]{42}['\"]?"), "Bitbucket app password env"),
     # NPM
-    (re.compile(r"npm_[A-Za-z0-9_-]{36}"), "NPM access token"),
-    (re.compile(r"(?i)NPM_TOKEN\s*[=:]\s*['\"]?npm_[A-Za-z0-9_-]{36}['\"]?"), "NPM token env"),
+    (re.compile(r"npm_[A-Za-z0-9_-]{8,}"), "NPM access token"),
+    (re.compile(r"(?i)NPM_TOKEN\s*[=:]\s*['\"]?npm_[A-Za-z0-9_-]{8,}['\"]?"), "NPM token env"),
     # PyPI
     (re.compile(r"pypi-AgEIcBlpbi[a-zA-Z0-9_-]{60,}"), "PyPI upload token"),
     (re.compile(r"(?i)PYPI_TOKEN\s*[=:]\s*['\"]?pypi-AgEIcBlpb[a-zA-Z0-9_-]{60,}['\"]?"), "PyPI token env"),

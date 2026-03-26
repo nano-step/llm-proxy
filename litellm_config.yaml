@@ -30,6 +30,8 @@ router_settings:
     "claude-haiku-4-5-20251001": "gitlab/claude-haiku-4-5"
   fallbacks:
   - "gitlab/claude-sonnet-4-6": &gitlab_fallbacks
+    - "gitlab/gpt-5-4"
+    - "gitlab/gpt-5-4-mini"
     - "gitlab/gpt-5-2"
     - "gitlab/gpt-5-3-codex"
     - "gitlab/gpt-5-2-codex"
@@ -49,6 +51,9 @@ router_settings:
   - "gitlab/gpt-5-codex": *gitlab_fallbacks
   - "gitlab/gpt-5-2-codex": *gitlab_fallbacks
   - "gitlab/gpt-5-3-codex": *gitlab_fallbacks
+  - "gitlab/gpt-5-4": *gitlab_fallbacks
+  - "gitlab/gpt-5-4-mini": *gitlab_fallbacks
+  - "gitlab/gpt-5-4-nano": *gitlab_fallbacks
 model_list:
 - model_name: gitlab/claude-sonnet-4-6
   litellm_params:
@@ -113,6 +118,24 @@ model_list:
 - model_name: gitlab/gpt-5-3-codex
   litellm_params:
     model: openai/gpt-5.3-codex
+    api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
+    api_key: gitlab-oidc
+    num_retries: 2
+- model_name: gitlab/gpt-5-4
+  litellm_params:
+    model: openai/gpt-5.4
+    api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
+    api_key: gitlab-oidc
+    num_retries: 2
+- model_name: gitlab/gpt-5-4-mini
+  litellm_params:
+    model: openai/gpt-5.4-mini
+    api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
+    api_key: gitlab-oidc
+    num_retries: 2
+- model_name: gitlab/gpt-5-4-nano
+  litellm_params:
+    model: openai/gpt-5.4-nano
     api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
     api_key: gitlab-oidc
     num_retries: 2

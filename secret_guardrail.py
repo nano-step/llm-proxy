@@ -653,13 +653,23 @@ JWT_PATTERNS = [
 # ─────────────────────────────────────────────────────────────────────────────
 
 PASSWORD_PATTERNS = [
-    (re.compile(r"(?i)(password|passwd|pwd|contraseña|contrasena|pass)\s*[=:]\s*['\"]?[A-Za-z0-9@#$%^&*=!_-]{8,30}['\"]?"), "Password assignment"),
-    (re.compile(r"(?i)(secret|private|pvt)[_-](key|token|pwd|pass)\s*[=:]\s*['\"]?[A-Za-z0-9_-]{10,}['\"]?"), "Secret/private key assignment"),
-    (re.compile(r"(?i)(db|database|dbase)[_-](pass|pwd|passwd|secret)\s*[=:]\s*['\"]?[A-Za-z0-9_-]{8,}['\"]?"), "Database password assignment"),
-    (re.compile(r"(?i)token[_-](secret|key)\s*[=:]\s*['\"]?[A-Za-z0-9_-]{10,}['\"]?"), "Token assignment"),
-    (re.compile(r"(?i)(api[_-]?key|apikey)[_-](secret|key)\s*[=:]\s*['\"]?[A-Za-z0-9_-]{15,}['\"]?"), "API key assignment"),
-    (re.compile(r"(?i)(client[_-]?secret|client[_-]?key)\s*[=:]\s*['\"]?[A-Za-z0-9_-]{15,}['\"]?"), "Client secret assignment"),
-    (re.compile(r"(?i)access[_-](key|token)\s*[=:]\s*['\"]?[A-Za-z0-9_-]{15,}['\"]?"), "Access key assignment"),
+    (re.compile(r"(?i)(password|passwd|pwd|contraseña|contrasena|pass)\s*[=:]\s*['\"]?[^\s'\"]{8,80}['\"]?"), "Password assignment"),
+    (re.compile(r"(?i)(secret|private|pvt)[_-](key|token|pwd|pass)\s*[=:]\s*['\"]?[^\s'\"]{10,}['\"]?"), "Secret/private key assignment"),
+    (re.compile(r"(?i)(db|database|dbase)[_-](pass|pwd|passwd|password|secret)\s*[=:]\s*['\"]?[^\s'\"]{8,}['\"]?"), "Database password assignment"),
+    (re.compile(r"(?i)token[_-](secret|key)\s*[=:]\s*['\"]?[^\s'\"]{10,}['\"]?"), "Token assignment"),
+    (re.compile(r"(?i)(api[_-]?key|apikey)[_-](secret|key)\s*[=:]\s*['\"]?[^\s'\"]{15,}['\"]?"), "API key assignment"),
+    (re.compile(r"(?i)(client[_-]?secret|client[_-]?key)\s*[=:]\s*['\"]?[^\s'\"]{15,}['\"]?"), "Client secret assignment"),
+    (re.compile(r"(?i)access[_-](key|token)\s*[=:]\s*['\"]?[^\s'\"]{15,}['\"]?"), "Access key assignment"),
+    # ── Generic env-var patterns: catch ANY_PREFIX_PASSWORD=, ANY_PREFIX_SECRET=, etc. ──
+    (re.compile(r"(?i)[A-Z_]*PASSWORD\s*[=:]\s*['\"]?[^\s'\"]{6,}['\"]?"), "Generic password assignment"),
+    (re.compile(r"(?i)[A-Z_]*_SECRET\s*[=:]\s*['\"]?[^\s'\"]{6,}['\"]?"), "Generic secret assignment"),
+    (re.compile(r"(?i)[A-Z_]*_TOKEN\s*[=:]\s*['\"]?[^\s'\"]{6,}['\"]?"), "Generic token assignment"),
+    (re.compile(r"(?i)[A-Z_]*_API_KEY\s*[=:]\s*['\"]?[^\s'\"]{6,}['\"]?"), "Generic API key assignment"),
+    # ── YAML-style: password: value, secret: value (indented or top-level) ──
+    (re.compile(r"(?im)^\s*password\s*:\s*['\"]?[^\s'\"]{6,}['\"]?"), "YAML password value"),
+    (re.compile(r"(?im)^\s*secret\s*:\s*['\"]?[^\s'\"]{6,}['\"]?"), "YAML secret value"),
+    (re.compile(r"(?im)^\s*token\s*:\s*['\"]?[^\s'\"]{6,}['\"]?"), "YAML token value"),
+    (re.compile(r"(?im)^\s*api_key\s*:\s*['\"]?[^\s'\"]{6,}['\"]?"), "YAML api_key value"),
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────

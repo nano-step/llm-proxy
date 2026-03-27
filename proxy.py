@@ -71,6 +71,7 @@ def write_config(token_data):
             "callbacks": [
                 "gitlab_token_callback.proxy_handler_instance",
                 "secret_guardrail.guardrail_instance",
+                "telegram_notifier.notifier_instance",
             ],
         },
     }

@@ -5,14 +5,18 @@ general_settings:
   disable_prisma_schema_update: true
 litellm_settings:
   drop_params: true
-  num_retries: 2
+  modify_params: true
+  num_retries: 5
   request_timeout: 120
-  allowed_fails: 3
-  cooldown_time: 30
+  allowed_fails: 10
+  cooldown_time: 120
+  retry_after: 30
+  timeout: 180
   callbacks:
   - gitlab_token_callback.proxy_handler_instance
   - secret_guardrail.guardrail_instance
-  - fallback_fixer.fallback_fixer_instance
+  # - fallback_fixer.fallback_fixer_instance  # disabled
+  # - fallback_fixer.fallback_fixer_instance  # disabled with fallbacks
 guardrails:
 - guardrail_name: hide-secrets
   litellm_params:
@@ -28,32 +32,6 @@ router_settings:
     "claude-opus-4-5-20251101": "gitlab/claude-opus-4-5"
     "claude-haiku-4-5": "gitlab/claude-haiku-4-5"
     "claude-haiku-4-5-20251001": "gitlab/claude-haiku-4-5"
-  fallbacks:
-  - "gitlab/claude-sonnet-4-6": &gitlab_fallbacks
-    - "gitlab/gpt-5-4"
-    - "gitlab/gpt-5-4-mini"
-    - "gitlab/gpt-5-2"
-    - "gitlab/gpt-5-3-codex"
-    - "gitlab/gpt-5-2-codex"
-    - "gitlab/gpt-5-1"
-    - "openai/gemini-3.1-pro-high"
-    - "openai/gemini-3-flash-preview"
-    - "openai/gemini-3-pro-preview"
-    - "openai/gemini-2.5-flash"
-    - "openai/qwen3-coder-plus"
-  - "gitlab/claude-opus-4-6": *gitlab_fallbacks
-  - "gitlab/claude-sonnet-4-5": *gitlab_fallbacks
-  - "gitlab/claude-opus-4-5": *gitlab_fallbacks
-  - "gitlab/claude-haiku-4-5": *gitlab_fallbacks
-  - "gitlab/gpt-5-1": *gitlab_fallbacks
-  - "gitlab/gpt-5-2": *gitlab_fallbacks
-  - "gitlab/gpt-5-mini": *gitlab_fallbacks
-  - "gitlab/gpt-5-codex": *gitlab_fallbacks
-  - "gitlab/gpt-5-2-codex": *gitlab_fallbacks
-  - "gitlab/gpt-5-3-codex": *gitlab_fallbacks
-  - "gitlab/gpt-5-4": *gitlab_fallbacks
-  - "gitlab/gpt-5-4-mini": *gitlab_fallbacks
-  - "gitlab/gpt-5-4-nano": *gitlab_fallbacks
 model_list:
 - model_name: gitlab/claude-sonnet-4-6
   litellm_params:
@@ -139,122 +117,7 @@ model_list:
     api_base: https://cloud.gitlab.com/ai/v1/proxy/openai/v1
     api_key: gitlab-oidc
     num_retries: 2
-- model_name: copilot/gpt-4.1
-  litellm_params:
-    model: github_copilot/gpt-4.1
-    num_retries: 2
-- model_name: copilot/gpt-4o
-  litellm_params:
-    model: github_copilot/gpt-4o
-    num_retries: 2
-- model_name: copilot/gpt-4o-mini
-  litellm_params:
-    model: github_copilot/gpt-4o-mini
-    num_retries: 2
-- model_name: copilot/gpt-4
-  litellm_params:
-    model: github_copilot/gpt-4
-    num_retries: 2
-- model_name: copilot/gpt-4-0125-preview
-  litellm_params:
-    model: github_copilot/gpt-4-0125-preview
-    num_retries: 2
-- model_name: copilot/gpt-4-o-preview
-  litellm_params:
-    model: github_copilot/gpt-4-o-preview
-    num_retries: 2
-- model_name: copilot/gpt-5-mini
-  litellm_params:
-    model: github_copilot/gpt-5-mini
-    num_retries: 2
-- model_name: copilot/gpt-3.5-turbo
-  litellm_params:
-    model: github_copilot/gpt-3.5-turbo
-    num_retries: 2
-- model_name: copilot-premium/claude-sonnet-4.6
-  litellm_params:
-    model: github_copilot/claude-sonnet-4.6
-    num_retries: 2
-- model_name: copilot-premium/claude-opus-4.6
-  litellm_params:
-    model: github_copilot/claude-opus-4.6
-    num_retries: 2
-- model_name: copilot-premium/claude-sonnet-4.5
-  litellm_params:
-    model: github_copilot/claude-sonnet-4.5
-    num_retries: 2
-- model_name: copilot-premium/claude-opus-4.5
-  litellm_params:
-    model: github_copilot/claude-opus-4.5
-    num_retries: 2
-- model_name: copilot-premium/claude-haiku-4.5
-  litellm_params:
-    model: github_copilot/claude-haiku-4.5
-    num_retries: 2
-- model_name: copilot-premium/claude-sonnet-4
-  litellm_params:
-    model: github_copilot/claude-sonnet-4
-    num_retries: 2
-- model_name: copilot-premium/gpt-5.4
-  litellm_params:
-    model: github_copilot/gpt-5.4
-    num_retries: 2
-- model_name: copilot-premium/gpt-5.2
-  litellm_params:
-    model: github_copilot/gpt-5.2
-    num_retries: 2
-- model_name: copilot-premium/gpt-5.1
-  litellm_params:
-    model: github_copilot/gpt-5.1
-    num_retries: 2
-- model_name: copilot-premium/gemini-3.1-pro-preview
-  litellm_params:
-    model: github_copilot/gemini-3.1-pro-preview
-    num_retries: 2
-- model_name: copilot-premium/gemini-3-pro-preview
-  litellm_params:
-    model: github_copilot/gemini-3-pro-preview
-    num_retries: 2
-- model_name: copilot-premium/gemini-3-flash-preview
-  litellm_params:
-    model: github_copilot/gemini-3-flash-preview
-    num_retries: 2
-- model_name: copilot-premium/gemini-2.5-pro
-  litellm_params:
-    model: github_copilot/gemini-2.5-pro
-    num_retries: 2
-- model_name: copilot-premium/grok-code-fast-1
-  litellm_params:
-    model: github_copilot/grok-code-fast-1
-    num_retries: 2
-- model_name: copilot-responses/gpt-5.3-codex
-  litellm_params:
-    model: github_copilot/gpt-5.3-codex
-    num_retries: 2
-- model_name: copilot-responses/gpt-5.2-codex
-  litellm_params:
-    model: github_copilot/gpt-5.2-codex
-    num_retries: 2
-- model_name: copilot-responses/gpt-5.1-codex
-  litellm_params:
-    model: github_copilot/gpt-5.1-codex
-    num_retries: 2
-- model_name: copilot-responses/gpt-5.1-codex-mini
-  litellm_params:
-    model: github_copilot/gpt-5.1-codex-mini
-    num_retries: 2
-- model_name: copilot-responses/gpt-5.1-codex-max
-  litellm_params:
-    model: github_copilot/gpt-5.1-codex-max
-    num_retries: 2
-- model_name: copilot-embedding/text-embedding-3-small
-  litellm_params:
-    model: github_copilot/text-embedding-3-small
-    num_retries: 2
-- model_name: copilot-embedding/text-embedding-ada-002
-  litellm_params:
-    model: github_copilot/text-embedding-ada-002
-    num_retries: 2
+
 - model_name: openai/gemini-3.1-pro-high
   litellm_params:
     model: openai/gemini-3.1-pro-high

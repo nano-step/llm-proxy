@@ -17,7 +17,7 @@ module.exports = {
       script: path.join(process.env.HOME, ".local/bin/litellm"),
       args: `--config ${path.join(CWD, "litellm_config.yaml")} --port ${process.env.LITELLM_PORT || "4000"}`,
       cwd: CWD,
-      interpreter: "none",
+      interpreter: "python3",
       env: {
         GITLAB_PAT: process.env.GITLAB_PAT,
         LITELLM_PORT: process.env.LITELLM_PORT || "4000",
@@ -34,7 +34,7 @@ module.exports = {
         DISABLE_SCHEMA_UPDATE: "true",
       },
       autorestart: true,
-      max_memory_restart: "1500M",
+      max_memory_restart: "1000M",
       max_restarts: 50,
       min_uptime: "5s",
       restart_delay: 3000,

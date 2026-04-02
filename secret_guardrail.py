@@ -1282,7 +1282,7 @@ class SecretGuardrail(CustomGuardrail):
                 summary_parts.append(f"prompt=[{'|'.join(unique_prompts)}]")
             if injection_warnings:
                 summary_parts.append(f"injection=[{'|'.join(sorted(set(injection_warnings)))}]")
-            action = "BLOCKED" if had_block else self.action.upper()
+            action = "BLOCKED" if (had_block and self.action == "block") else "REDACTED" if had_redaction else self.action.upper()
             logger.warning("[secret-guardrail] %s — %s", action, "; ".join(summary_parts))
 
         # ── Report to LiteLLM standard guardrail logging ─────────────────────

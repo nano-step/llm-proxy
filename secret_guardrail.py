@@ -1257,15 +1257,7 @@ class SecretGuardrail(CustomGuardrail):
                     for e in result.events:
                         if e.secret_id:  # skip None (entropy-only)
                             prompt_secrets.append(e.secret_id)
-                    if self.action == "block" and result.blocked:
-                        raise PermissionError(
-                            "Blocked: prompt contains sensitive data. "
-                            "Do not share API keys, tokens, or secrets in prompts."
-                        )
-                    if isinstance(raw_content, str):
-                        msg["content"] = result.redacted_text
-                    elif isinstance(raw_content, list):
-                        self._apply_redaction(raw_content, text_content, result.redacted_text)
+                    # warn-only mode: do not redact content, just log
 
         should_log = had_block or bool(injection_warnings)
         if not should_log and (vault_secrets or header_secrets or prompt_secrets):
@@ -1282,7 +1274,7 @@ class SecretGuardrail(CustomGuardrail):
                 summary_parts.append(f"prompt=[{'|'.join(unique_prompts)}]")
             if injection_warnings:
                 summary_parts.append(f"injection=[{'|'.join(sorted(set(injection_warnings)))}]")
-            action = "BLOCKED" if (had_block and self.action == "block") else "REDACTED" if had_redaction else self.action.upper()
+            action = "WARN"
             logger.warning("[secret-guardrail] %s — %s", action, "; ".join(summary_parts))
 
         # ── Report to LiteLLM standard guardrail logging ─────────────────────
@@ -1350,12 +1342,9 @@ class SecretGuardrail(CustomGuardrail):
                     for e in result.events:
                         if e.secret_id:
                             post_event_types.append(e.secret_id)
-                    choice.message.content = (
-                        "[Response blocked: detected sensitive data in output. "
-                        "The requested information cannot be provided.]"
-                    )
+                    # warn-only mode: do not block response, just log
                     logger.warning(
-                        "[secret-guardrail] BLOCKED response — vault match: %s",
+                        "[secret-guardrail] WARN (would-block) response — vault match: %s",
                         [e.secret_id for e in result.events],
                     )
                 elif result.events:
@@ -1363,9 +1352,9 @@ class SecretGuardrail(CustomGuardrail):
                     for e in result.events:
                         if e.secret_id:
                             post_event_types.append(e.secret_id)
-                    choice.message.content = result.redacted_text
+                    # warn-only mode: do not redact response, just log
                     logger.warning(
-                        "[secret-guardrail] REDACTED secrets in response: %s",
+                        "[secret-guardrail] WARN secrets detected in response: %s",
                         [e.secret_id for e in result.events],
                     )
 

@@ -6,6 +6,8 @@ general_settings:
   user_api_key_cache_ttl: 600
   proxy_batch_write_at: 60
   disable_spend_logs: true
+  db_connection_pool_limit: 10
+  db_connection_timeout: 30
 litellm_settings:
   drop_params: true
   modify_params: true

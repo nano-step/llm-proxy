@@ -25,13 +25,15 @@ module.exports = {
         DATABASE_URL: (() => {
           const url = process.env.DATABASE_URL || "";
           const sep = url.includes("?") ? "&" : "?";
-          return url + sep + "connection_limit=10&pool_timeout=30&connect_timeout=10";
+          return url + sep + "connection_limit=10&pool_timeout=60&connect_timeout=30&keepalives=1&keepalives_idle=60&keepalives_interval=10&keepalives_count=5";
         })(),
         STORE_MODEL_IN_DB: process.env.STORE_MODEL_IN_DB || "True",
         UI_USERNAME: process.env.UI_USERNAME || "admin",
         UI_PASSWORD: process.env.UI_PASSWORD,
         PYTHONPATH: CWD,
         DISABLE_SCHEMA_UPDATE: "true",
+        PRISMA_CLIENT_ENGINE_TYPE: "library",
+        PRISMA_ENGINE_PROTOCOL: "json",
       },
       autorestart: true,
       max_memory_restart: "1000M",

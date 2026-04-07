@@ -25,7 +25,7 @@ module.exports = {
         DATABASE_URL: (() => {
           const url = process.env.DATABASE_URL || "";
           const sep = url.includes("?") ? "&" : "?";
-          return url + sep + "connection_limit=20&pool_timeout=30";
+          return url + sep + "connection_limit=10&pool_timeout=30&connect_timeout=10";
         })(),
         STORE_MODEL_IN_DB: process.env.STORE_MODEL_IN_DB || "True",
         UI_USERNAME: process.env.UI_USERNAME || "admin",
@@ -60,6 +60,22 @@ module.exports = {
       restart_delay: 1000,
       error_file: path.join(CWD, "watchdog-error.log"),
       out_file: path.join(CWD, "watchdog-out.log"),
+      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
+      watch: false,
+    },
+    {
+      name: "opencode",
+      script: path.join(process.env.HOME, ".opencode/bin/opencode"),
+      args: "serve --port 3789 --hostname 127.0.0.1",
+      cwd: process.env.HOME,
+      interpreter: "none",
+      autorestart: true,
+      max_restarts: 50,
+      min_uptime: "5s",
+      restart_delay: 3000,
+      error_file: path.join(CWD, "opencode-error.log"),
+      out_file: path.join(CWD, "opencode-out.log"),
+      merge_logs: true,
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
       watch: false,
     },
